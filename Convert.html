@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz → JSON</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0f1117;
+    --panel:#161922;
+    --panel2:#1b1f2b;
+    --line:#272c3a;
+    --line-soft:#21252f;
+    --ink:#e7e9f0;
+    --ink-dim:#9398ab;
+    --ink-faint:#5d6175;
+    --amber:#e8a23d;
+    --amber-soft:#3a2f1c;
+    --teal:#3fc9a8;
+    --teal-soft:#163029;
+    --red:#e8694a;
+    --red-soft:#3a2218;
+    --mono:'JetBrains Mono','Fira Code','SF Mono',Consolas,monospace;
+    --sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --radius:6px;
+  }
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh;font-size:14.5px;line-height:1.6}
+
+  /* ── Header ── */
+  header{
+    background:var(--panel);border-bottom:1px solid var(--line);
+    padding:14px 20px;display:flex;align-items:center;gap:14px;
+  }
+  header .mark{
+    width:30px;height:30px;border-radius:7px;background:linear-gradient(155deg,var(--amber),#c97a1f);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;
+    font-size:13px;color:#1a1206;flex-shrink:0;letter-spacing:-0.5px;
+  }
+  header .title{display:flex;flex-direction:column;gap:1px}
+  header h1{font-size:15px;font-weight:600;letter-spacing:-0.2px}
+  header .sub{font-size:11.5px;color:var(--ink-faint);font-family:var(--mono)}
+  header .spacer{flex:1}
+  header .badges{display:flex;gap:6px}
+  .pill{
+    font-size:11px;color:var(--ink-dim);background:var(--panel2);padding:4px 10px;
+    border-radius:20px;border:1px solid var(--line);font-family:var(--mono);white-space:nowrap;
+  }
+
+  /* ── Layout ── */
+  .layout{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 59px)}
+  .panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+  .panel + .panel{border-left:1px solid var(--line)}
+
+  .panel-header{
+    padding:11px 18px;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;
+  }
+  .panel-header .label{
+    font-size:11.5px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;
+    letter-spacing:1px;font-family:var(--mono);display:flex;align-items:center;gap:7px;
+  }
+  .panel-header .label .dot{width:6px;height:6px;border-radius:50%}
+  .dot.in{background:var(--ink-faint)}
+  .dot.out{background:var(--teal)}
+  .panel-header .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+  /* ── Config bar ── */
+  .config-bar{
+    padding:10px 18px;background:var(--amber-soft);border-bottom:1px solid #4a3a22;
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;flex-shrink:0;
+  }
+  .config-field{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#e3c894}
+  .config-field input[type=text]{
+    border:1px solid #5a4626;border-radius:var(--radius);padding:5px 9px;font-size:12.5px;
+    width:120px;background:#241a0c;color:var(--ink);font-family:var(--mono);
+  }
+  .config-field input[type=text]:focus{outline:none;border-color:var(--amber)}
+  .config-field.type-field input{width:150px}
+  .config-field input[type=checkbox]{accent-color:var(--amber);width:15px;height:15px;cursor:pointer}
+  .config-field label{cursor:pointer}
+
+  /* ── Textarea ── */
+  textarea{
+    flex:1;border:none;outline:none;resize:none;padding:18px 20px;font-family:var(--mono);
+    font-size:13px;line-height:1.75;background:var(--bg);color:var(--ink);tab-size:2;
+  }
+  textarea::placeholder{color:var(--ink-faint)}
+
+  /* ── Output ── */
+  .output-area{
+    flex:1;overflow-y:auto;padding:18px 20px;font-family:var(--mono);font-size:12.5px;
+    line-height:1.75;background:var(--bg);white-space:pre-wrap;word-break:break-word;color:var(--ink);
+  }
+  .output-area.empty{
+    display:flex;align-items:center;justify-content:center;color:var(--ink-faint);
+    font-family:var(--sans);font-size:13.5px;text-align:center;gap:10px;flex-direction:column;
+  }
+  .output-area.empty svg{opacity:0.35}
+  .output-area .empty-hint{font-size:12px;color:var(--ink-faint);max-width:280px}
+
+  /* ── Footer ── */
+  .footer-bar{
+    padding:9px 18px;background:var(--panel);border-top:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+    font-size:12px;color:var(--ink-dim);font-family:var(--mono);gap:10px;
+  }
+
+  /* ── Buttons ── */
+  button{
+    cursor:pointer;border:1px solid var(--line);border-radius:var(--radius);padding:6px 13px;
+    font-size:12.5px;font-weight:500;background:var(--panel2);color:var(--ink);
+    transition:all .12s;line-height:1.4;font-family:var(--sans);display:inline-flex;
+    align-items:center;gap:6px;
+  }
+  button:hover{background:#23283a;border-color:#34394a}
+  button:active{transform:scale(0.97)}
+  button.primary{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:600}
+  button.primary:hover{background:#f0ad52}
+  button.success{background:var(--teal);color:#06231b;border-color:var(--teal);font-weight:600}
+  button.success:hover{background:#54dcb9}
+  button.danger{background:transparent;color:var(--red);border-color:#5a3326}
+  button.danger:hover{background:var(--red-soft)}
+  button.ghost{background:transparent}
+
+  /* ── Badges ── */
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;font-family:var(--mono)}
+  .badge.ok{background:var(--teal-soft);color:var(--teal)}
+  .badge.warn{background:var(--amber-soft);color:var(--amber)}
+  .badge.err{background:var(--red-soft);color:var(--red)}
+
+  /* ── Toast ── */
+  .toast{
+    position:fixed;bottom:24px;right:24px;background:var(--panel2);color:var(--ink);
+    padding:11px 18px;border-radius:var(--radius);font-size:13px;opacity:0;
+    transform:translateY(8px);transition:all .2s;pointer-events:none;z-index:99;
+    border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.show{opacity:1;transform:translateY(0)}
+
+  /* ── JSON syntax colors ── */
+  .json-key{color:#7fb8e8}
+  .json-str{color:var(--teal)}
+  .json-num{color:var(--amber)}
+  .json-bool{color:var(--red)}
+  .json-null{color:var(--ink-faint)}
+
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  ::-webkit-scrollbar-thumb:hover{background:#34394a}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  @media(max-width:900px){
+    .layout{grid-template-columns:1fr;grid-template-rows:1fr 1fr;height:auto;min-height:calc(100vh - 59px)}
+    .panel{min-height:50vh}
+    .panel + .panel{border-left:none;border-top:1px solid var(--line)}
+    header .sub{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">{ }</div>
+  <div class="title">
+    <h1>Về Đây Anh Cứu</h1>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<div class="layout">
+  <div class="panel">
+    <div class="panel-header">
+      <span class="label"><span class="dot in"></span>Văn bản đầu vào</span>
+      <div class="actions">
+        <button class="ghost" onclick="loadSample('basic')">Mẫu cơ bản</button>
+        <button class="ghost" onclick="loadSample('code')">Mẫu code</button>
+        <button class="danger" onclick="clearInput()">Xoá</button>
+        <button class="primary" onclick="convert()">▶ Chuyển đổi</button>
+      </div>
+    </div>
+
+    <div class="config-bar">
+      <div class="config-field">
+        <label for="defaultTags">Tags</label>
+        <input type="text" id="defaultTags" value="MMA301" placeholder="tag1, tag2">
+      </div>
+      <div class="config-field type-field">
+        <label for="defaultType">Type</label>
+        <input type="text" id="defaultType" value="multiple_choice">
+      </div>
+      <div class="config-field">
+        <input type="checkbox" id="flashcard" checked>
+        <label for="flashcard">isAvailableFlashcard</label>
+      </div>
+    </div>
+
+    <textarea id="inputText" placeholder="Dán văn bản đề thi vào đây...
+
+Hỗ trợ code block trong câu hỏi và giải thích:
+
+Câu 1
+Đề bài: Đoạn code sau làm gì?
+```javascript
+const arr = [1, 2, 3];
+console.log(arr.map(x => x * 2));
+```
+A. In ra [1, 2, 3]
+B. In ra [2, 4, 6]
+Đáp án đúng: B
+Giải thích: Hàm map nhân đôi mỗi phần tử." spellcheck="false"></textarea>
+
+    <div class="footer-bar">
+      <span id="inputStats">Chưa có nội dung</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span class="label"><span class="dot out"></span>JSON đầu ra</span>
+      <div class="actions">
+        <span id="resultBadge"></span>
+        <button class="ghost" onclick="copyJSON()">📋 Sao chép</button>
+        <button class="success" onclick="downloadJSON()">⬇ Tải JSON</button>
+      </div>
+    </div>
+    <div id="outputArea" class="output-area empty">
+      <svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+      <div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div>
+      <div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>
+    </div>
+    <div class="footer-bar">
+      <span id="outputStats">—</span>
+      <span id="parseInfo"></span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let parsedJSON = null;
+const inputEl = document.getElementById('inputText');
+const outputEl = document.getElementById('outputArea');
+
+inputEl.addEventListener('input', updateInputStats);
+
+function updateInputStats() {
+  const t = inputEl.value.trim();
+  if (!t) { document.getElementById('inputStats').textContent = 'Chưa có nội dung'; return; }
+  const lines = t.split('\n').length;
+  const chars = t.length;
+  const rough = (t.match(/Câu\s+\d+/gi) || []).length;
+  const codeBlocks = (t.match(/```/g) || []).length / 2;
+  document.getElementById('inputStats').textContent =
+    `${lines} dòng · ${chars} ký tự${rough ? ` · ~${rough} câu` : ''}${codeBlocks >= 1 ? ` · ${Math.floor(codeBlocks)} code block` : ''}`;
+}
+
+function clearInput() {
+  inputEl.value = '';
+  outputEl.className = 'output-area empty';
+  outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
+  parsedJSON = null;
+  document.getElementById('resultBadge').innerHTML = '';
+  document.getElementById('outputStats').textContent = '—';
+  document.getElementById('parseInfo').textContent = '';
+  updateInputStats();
+}
+
+function showToast(msg, dur = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function copyJSON() {
+  if (!parsedJSON) { showToast('Chưa có dữ liệu để sao chép'); return; }
+  navigator.clipboard.writeText(JSON.stringify(parsedJSON, null, 2))
+    .then(() => showToast('✅ Đã sao chép JSON'))
+    .catch(() => showToast('❌ Không thể sao chép'));
+}
+
+function downloadJSON() {
+  if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
+  const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'questions_' + Date.now() + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('✅ Đã tải file JSON');
+}
+
+// ─── CORE: xử lý code blocks ────────────────────────────────────────────────
+
+function segmentize(raw) {
+  const segments = [];
+  const fencedRe = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = fencedRe.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: 'text', content: raw.slice(lastIndex, match.index) });
+    }
+    const lang = match[1].trim() || 'plaintext';
+    const code = match[2];
+    segments.push({ type: 'code', lang: lang, content: code });
+    lastIndex = fencedRe.lastIndex;
+  }
+
+  if (lastIndex < raw.length) {
+    segments.push({ type: 'text', content: raw.slice(lastIndex) });
+  }
+
+  return segments;
+}
+
+function textToHTML(str) {
+  str = str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  str = str.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  str = str.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return str;
+}
+
+function escapeCode(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function rawToHTML(raw) {
+  if (!raw || !raw.trim()) return '';
+  const segments = segmentize(raw);
+  let html = '';
+  for (const seg of segments) {
+    if (seg.type === 'code') {
+      const lang = seg.lang !== 'plaintext' ? ` class="language-${seg.lang}"` : '';
+      const codeContent = seg.content.replace(/\n$/, '');
+      html += `<pre><code${lang}>${escapeCode(codeContent)}</code></pre>`;
+    } else {
+      const lines = seg.content.split('\n');
+      const parts = [];
+      let buf = '';
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (l.trim() === '') {
+          if (buf.trim()) { parts.push(textToHTML(buf.trim())); buf = ''; }
+        } else {
+          buf += (buf ? ' ' : '') + l;
+        }
+      }
+      if (buf.trim()) parts.push(textToHTML(buf.trim()));
+      html += parts.join('<br>');
+    }
+  }
+  return html;
+}
+
+// ─── Build questionText từ câu hỏi + options ────────────────────────────────
+
+function buildQuestionText(questionRaw, options) {
+  let html = rawToHTML(questionRaw);
+  if (html && !html.endsWith('<br>') && !html.endsWith('>')) html += '<br>';
+  else if (html && html.endsWith('</pre>')) html += '';
+
+  for (const opt of options) {
+    html += textToHTML(opt) + '<br>';
+  }
+  return html;
+}
+
+// ─── Parse correct answer ────────────────────────────────────────────────────
+
+function extractCorrectAnswer(line) {
+  line = line.trim();
+
+  const multiViRe = /([A-D])\s*(?:và|and|,)\s*([A-D])(?:\s*(?:và|and|,)\s*([A-D]))?/i;
+  const mMulti = line.match(multiViRe);
+  if (mMulti) {
+    let ans = mMulti[1].toUpperCase() + mMulti[2].toUpperCase();
+    if (mMulti[3]) ans += mMulti[3].toUpperCase();
+    return ans;
+  }
+
+  const mConcat = line.match(/^([A-D]{2,4})\b/i);
+  if (mConcat) return mConcat[1].toUpperCase();
+
+  const mSingle = line.match(/^([A-D])[.\s:]/i);
+  if (mSingle) return mSingle[1].toUpperCase();
+
+  const mLetter = line.match(/^([A-D])$/i);
+  if (mLetter) return mLetter[1].toUpperCase();
+
+  if (/^(true|đúng)$/i.test(line)) return 'True';
+  if (/^(false|sai)$/i.test(line)) return 'False';
+
+  return line.split(/[.,:]/)[0].trim().toUpperCase() || line;
+}
+
+// ─── MAIN PARSER ─────────────────────────────────────────────────────────────
+
+function parseQuizText(text) {
+  const defaultTags = document.getElementById('defaultTags').value.trim() || 'general';
+  const flashcard    = document.getElementById('flashcard').checked;
+  const defaultType  = document.getElementById('defaultType').value.trim() || 'multiple_choice';
+
+  const lines = text.split('\n');
+  const totalLines = lines.length;
+  const questions = [];
+
+  let i = 0;
+
+  function isQuestionStart(l) {
+    return /^Câu\s+\d+/i.test(l) || /^Question\s+\d+/i.test(l);
+  }
+
+  function readBlock(startIdx) {
+    const firstLine = lines[startIdx];
+    if (!firstLine.startsWith('```')) {
+      return { consumed: 1, raw: firstLine };
+    }
+    let raw = firstLine + '\n';
+    let j = startIdx + 1;
+    while (j < totalLines) {
+      raw += lines[j] + '\n';
+      if (lines[j].trim() === '```' || lines[j].trim().startsWith('```') && j > startIdx) {
+        if (lines[j].trim() === '```' && j > startIdx) {
+          j++;
+          break;
+        }
+        if (lines[j].trimStart() === '```' && j > startIdx) {
+          j++;
+          break;
+        }
+      }
+      j++;
+    }
+    return { consumed: j - startIdx, raw: raw.trimEnd() };
+  }
+
+  while (i < totalLines) {
+    const line = lines[i].trim();
+    if (!isQuestionStart(line)) { i++; continue; }
+
+    let questionRaw   = '';
+    let options       = [];
+    let correctAnswer = '';
+    let explanationRaw = '';
+    let tags          = defaultTags;
+    let questionType  = defaultType;
+
+    i++;
+
+    while (i < totalLines) {
+      const rawLine = lines[i];
+      const l = rawLine.trim();
+
+      if (isQuestionStart(l)) break;
+
+      if (!l || /^_{3,}$/.test(l) || /^-{3,}$/.test(l)) { i++; continue; }
+
+      if (/^(Đề bài|Câu hỏi)\s*:/i.test(l)) {
+        questionRaw = l.replace(/^(Đề bài|Câu hỏi)\s*:\s*/i, '').trim();
+        i++;
+        while (i < totalLines) {
+          const nl = lines[i].trim();
+          if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(nl)) break;
+          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (/^(Đáp án đúng|Correct Answer|Answer)\s*:/i.test(nl)) break;
+          if (/^(Giải thích|Explanation)\s*:/i.test(nl)) break;
+          if (/^Tags?\s*:/i.test(nl)) break;
+          if (isQuestionStart(nl)) break;
+
+          if (lines[i].trim().startsWith('```')) {
+            const block = readBlock(i);
+            questionRaw += '\n' + block.raw;
+            i += block.consumed;
+          } else {
+            if (nl) questionRaw += '\n' + nl;
+            i++;
+          }
+        }
+        continue;
+      }
+
+      if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(l)) { i++; continue; }
+
+      if (/^[A-D]\.\s+/i.test(l)) {
+        let optText = l;
+        i++;
+        while (i < totalLines) {
+          const nl = lines[i].trim();
+          if (!nl) break;
+          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (/^(Đáp án đúng|Correct Answer|Answer|Giải thích|Explanation|Tags?)\s*:/i.test(nl)) break;
+          if (isQuestionStart(nl)) break;
+          if (lines[i].trim().startsWith('```')) break;
+          optText += ' ' + nl;
+          i++;
+        }
+        options.push(optText);
+        continue;
+      }
+
+      if (/^(Đáp án đúng|Correct Answer|Answer)\s*:/i.test(l)) {
+        const raw = l.replace(/^(Đáp án đúng|Correct Answer|Answer)\s*:\s*/i, '').trim();
+        correctAnswer = extractCorrectAnswer(raw);
+        i++;
+        continue;
+      }
+
+      if (/^(Giải thích|Explanation)\s*:/i.test(l)) {
+        explanationRaw = l.replace(/^(Giải thích|Explanation)\s*:\s*/i, '').trim();
+        i++;
+        while (i < totalLines) {
+          const nl = lines[i].trim();
+          if (isQuestionStart(nl)) break;
+          if (/^Tags?\s*:/i.test(nl)) break;
+          if (/^(Loại câu hỏi|Type)\s*:/i.test(nl)) break;
+          if (/^[A-D]\.\s+/.test(nl) && !explanationRaw) break;
+
+          if (lines[i].trim().startsWith('```')) {
+            const block = readBlock(i);
+            explanationRaw += '\n' + block.raw;
+            i += block.consumed;
+          } else {
+            if (nl) explanationRaw += '\n' + nl;
+            else if (explanationRaw) explanationRaw += '\n';
+            i++;
+          }
+        }
+        continue;
+      }
+
+      if (/^Tags?\s*:/i.test(l)) {
+        tags = l.replace(/^Tags?\s*:\s*/i, '').trim();
+        i++;
+        continue;
+      }
+
+      if (/^(Loại câu hỏi|Type)\s*:/i.test(l)) {
+        questionType = l.replace(/^(Loại câu hỏi|Type)\s*:\s*/i, '').trim();
+        i++;
+        continue;
+      }
+
+      if (!questionRaw && !options.length && !correctAnswer && l.length > 3) {
+        questionRaw = l;
+        i++;
+        while (i < totalLines) {
+          const nl = lines[i].trim();
+          if (!nl) break;
+          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (/^(Đáp án|Answer)/i.test(nl)) break;
+          if (isQuestionStart(nl)) break;
+          if (lines[i].trim().startsWith('```')) {
+            const block = readBlock(i);
+            questionRaw += '\n' + block.raw;
+            i += block.consumed;
+          } else {
+            questionRaw += '\n' + nl;
+            i++;
+          }
+        }
+        continue;
+      }
+
+      i++;
+    }
+
+    if (!questionRaw && options.length === 0 && !correctAnswer) continue;
+
+    let finalType = questionType;
+    if (finalType === defaultType && /^(true|false|đúng|sai)$/i.test(correctAnswer)) {
+      finalType = 'true_false';
+    }
+
+    const obj = {
+      questionText: buildQuestionText(questionRaw, options),
+      questionType: finalType,
+      correctAnswer: correctAnswer,
+      explanation: rawToHTML(explanationRaw),
+      tags: tags
+    };
+    if (flashcard) obj.isAvailableFlashcard = true;
+    questions.push(obj);
+  }
+
+  return questions;
+}
+
+// ─── Output rendering ────────────────────────────────────────────────────────
+
+function escapeForDisplay(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function syntaxHighlight(json) {
+  return json.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    (m) => {
+      if (/^"/.test(m)) {
+        if (/:$/.test(m)) return `<span class="json-key">${m}</span>`;
+        return `<span class="json-str">${m}</span>`;
+      }
+      if (/true|false/.test(m)) return `<span class="json-bool">${m}</span>`;
+      if (/null/.test(m)) return `<span class="json-null">${m}</span>`;
+      return `<span class="json-num">${m}</span>`;
+    }
+  );
+}
+
+function convert() {
+  const text = inputEl.value.trim();
+  if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
+
+  const start = performance.now();
+  let questions = [], error = null;
+  try { questions = parseQuizText(text); }
+  catch(e) { error = e; }
+  const elapsed = (performance.now() - start).toFixed(1);
+
+  if (error) {
+    outputEl.className = 'output-area';
+    outputEl.innerHTML = `<span style="color:var(--red)">❌ Lỗi parser: ${escapeForDisplay(error.message)}\n\n${escapeForDisplay(error.stack||'')}</span>`;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
+    return;
+  }
+
+  parsedJSON = questions;
+  const jsonStr = JSON.stringify(questions, null, 2);
+
+  if (questions.length === 0) {
+    outputEl.className = 'output-area empty';
+    outputEl.innerHTML = `<div><p>⚠️ Không tìm thấy câu hỏi nào.</p><p class="empty-hint" style="margin-top:8px">Mỗi câu cần bắt đầu bằng <strong>Câu N</strong> hoặc <strong>Question N</strong>.</p></div>`;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge warn">0 câu</span>`;
+    document.getElementById('outputStats').textContent = '—';
+    document.getElementById('parseInfo').textContent = '';
+    return;
+  }
+
+  outputEl.className = 'output-area';
+  outputEl.innerHTML = syntaxHighlight(escapeForDisplay(jsonStr));
+  outputEl.scrollTop = 0;
+
+  const multi = questions.filter(q => q.correctAnswer.length > 1).length;
+  const hasCode = questions.filter(q => q.questionText.includes('<pre>') || q.explanation.includes('<pre>')).length;
+  document.getElementById('resultBadge').innerHTML = `<span class="badge ok">✓ ${questions.length} câu</span>`;
+  document.getElementById('outputStats').textContent = `${questions.length} câu · ${(jsonStr.length/1024).toFixed(1)} KB`;
+  document.getElementById('parseInfo').textContent =
+    `${multi} câu nhiều đáp án${hasCode ? ` · ${hasCode} câu có code` : ''} · ${elapsed}ms`;
+  showToast(`✅ Đã chuyển ${questions.length} câu thành công`);
+}
+
+// ─── Sample data ─────────────────────────────────────────────────────────────
+
+function loadSample(type) {
+  if (type === 'basic') {
+    inputEl.value =
+`Câu 1
+Đề bài: What is the default data structure supported by AsyncStorage?
+Các lựa chọn:
+A. Arrays
+B. Buffers
+C. Key-value pairs
+D. Trees
+Đáp án đúng: C. Key-value pairs
+Giải thích: AsyncStorage là một hệ thống lưu trữ bất đồng bộ, bất biến, dưới dạng các cặp khóa - giá trị (key-value pairs) dành cho toàn bộ ứng dụng React Native.
+
+Câu 2
+Đề bài: Which of the following statements most accurately describes the difference between props and state in React?
+Các lựa chọn:
+A. props are used to pass data from a parent component to a child component, while state is used to manage the internal data of a component.
+B. state can be changed by the component itself, while props are read-only for the receiving component.
+C. props allow the component to automatically update the displayed data based on user interactions.
+D. state should only be passed as a parameter between components and should not be used to store internal data.
+Đáp án đúng: A và B
+Giải thích: Ý A đúng vì props truyền dữ liệu từ cha sang con, còn state quản lý dữ liệu nội bộ của component. Ý B đúng vì props có tính chất chỉ đọc (read-only) đối với component nhận, trong khi component có toàn quyền thay đổi state của chính nó.`;
+  } else {
+    inputEl.value =
+`Câu 1
+Đề bài: Đoạn code JavaScript sau in ra kết quả gì?
+\`\`\`javascript
+const arr = [1, 2, 3, 4, 5];
+const result = arr
+  .filter(x => x % 2 === 0)
+  .map(x => x * x);
+console.log(result);
+\`\`\`
+Các lựa chọn:
+A. [1, 4, 9, 16, 25]
+B. [4, 16]
+C. [2, 4]
+D. [1, 9, 25]
+Đáp án đúng: B
+Giải thích: Đầu tiên, \`filter(x => x % 2 === 0)\` lọc ra các số chẵn là [2, 4]. Sau đó \`map(x => x * x)\` bình phương từng phần tử, cho ra kết quả:
+\`\`\`javascript
+// Bước 1 - filter:
+[2, 4]
+
+// Bước 2 - map (bình phương):
+[4, 16]
+\`\`\`
+Vì vậy đáp án đúng là B.
+
+Câu 2
+Đề bài: Xem xét đoạn code Java sau. Output của chương trình là gì?
+\`\`\`java
+public class Main {
+    public static void main(String[] args) {
+        int x = 5;
+        int y = x++;
+        System.out.println("x = " + x + ", y = " + y);
+    }
+}
+\`\`\`
+Các lựa chọn:
+A. x = 5, y = 5
+B. x = 6, y = 5
+C. x = 6, y = 6
+D. x = 5, y = 6
+Đáp án đúng: B
+Giải thích: Toán tử \`x++\` là **post-increment** — nghĩa là giá trị của \`x\` được gán cho \`y\` trước (y = 5), rồi mới tăng \`x\` lên 1 (x = 6). Nếu dùng \`++x\` (pre-increment) thì cả hai đều là 6.
+\`\`\`java
+int y = x++;  // y nhận giá trị 5, sau đó x thành 6
+\`\`\`
+
+Câu 3
+Đề bài: Hook \`useReducer\` trong React Native được dùng để làm gì?
+Các lựa chọn:
+A. Quản lý state phức tạp với reducer function
+B. Gọi API bất đồng bộ
+C. Tạo animation
+D. Quản lý navigation
+Đáp án đúng: A
+Giải thích: \`useReducer\` giải quyết bài toán state phức tạp bằng cách tập trung logic vào một hàm reducer. Ví dụ:
+\`\`\`javascript
+const initialState = { count: 0 };
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'increment':
+      return { count: state.count + 1 };
+    case 'decrement':
+      return { count: state.count - 1 };
+    default:
+      return state;
+  }
+}
+
+// Sử dụng trong component:
+const [state, dispatch] = useReducer(reducer, initialState);
+dispatch({ type: 'increment' }); // count = 1
+\`\`\``;
+  }
+  updateInputStats();
+  showToast(type === 'code' ? '📄 Đã nạp mẫu có code block' : '📄 Đã nạp mẫu cơ bản');
+}
+
+updateInputStats();
+</script>
+</body>
+</html>
