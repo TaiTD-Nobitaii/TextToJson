@@ -27,7 +27,6 @@
   }
   body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh;font-size:14.5px;line-height:1.6}
 
-  /* ── Header ── */
   header{
     background:var(--panel);border-bottom:1px solid var(--line);
     padding:14px 20px;display:flex;align-items:center;gap:14px;
@@ -47,7 +46,6 @@
     border-radius:20px;border:1px solid var(--line);font-family:var(--mono);white-space:nowrap;
   }
 
-  /* ── Layout ── */
   .layout{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 59px)}
   .panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
   .panel + .panel{border-left:1px solid var(--line)}
@@ -65,7 +63,6 @@
   .dot.out{background:var(--teal)}
   .panel-header .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
-  /* ── Config bar ── */
   .config-bar{
     padding:10px 18px;background:var(--amber-soft);border-bottom:1px solid #4a3a22;
     display:flex;align-items:center;gap:18px;flex-wrap:wrap;flex-shrink:0;
@@ -80,14 +77,12 @@
   .config-field input[type=checkbox]{accent-color:var(--amber);width:15px;height:15px;cursor:pointer}
   .config-field label{cursor:pointer}
 
-  /* ── Textarea ── */
   textarea{
     flex:1;border:none;outline:none;resize:none;padding:18px 20px;font-family:var(--mono);
     font-size:13px;line-height:1.75;background:var(--bg);color:var(--ink);tab-size:2;
   }
   textarea::placeholder{color:var(--ink-faint)}
 
-  /* ── Output ── */
   .output-area{
     flex:1;overflow-y:auto;padding:18px 20px;font-family:var(--mono);font-size:12.5px;
     line-height:1.75;background:var(--bg);white-space:pre-wrap;word-break:break-word;color:var(--ink);
@@ -99,14 +94,12 @@
   .output-area.empty svg{opacity:0.35}
   .output-area .empty-hint{font-size:12px;color:var(--ink-faint);max-width:280px}
 
-  /* ── Footer ── */
   .footer-bar{
     padding:9px 18px;background:var(--panel);border-top:1px solid var(--line);
     display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
     font-size:12px;color:var(--ink-dim);font-family:var(--mono);gap:10px;
   }
 
-  /* ── Buttons ── */
   button{
     cursor:pointer;border:1px solid var(--line);border-radius:var(--radius);padding:6px 13px;
     font-size:12.5px;font-weight:500;background:var(--panel2);color:var(--ink);
@@ -123,13 +116,11 @@
   button.danger:hover{background:var(--red-soft)}
   button.ghost{background:transparent}
 
-  /* ── Badges ── */
   .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;font-family:var(--mono)}
   .badge.ok{background:var(--teal-soft);color:var(--teal)}
   .badge.warn{background:var(--amber-soft);color:var(--amber)}
   .badge.err{background:var(--red-soft);color:var(--red)}
 
-  /* ── Toast ── */
   .toast{
     position:fixed;bottom:24px;right:24px;background:var(--panel2);color:var(--ink);
     padding:11px 18px;border-radius:var(--radius);font-size:13px;opacity:0;
@@ -138,7 +129,6 @@
   }
   .toast.show{opacity:1;transform:translateY(0)}
 
-  /* ── JSON syntax colors ── */
   .json-key{color:#7fb8e8}
   .json-str{color:var(--teal)}
   .json-num{color:var(--amber)}
@@ -164,6 +154,7 @@
   <div class="mark">{ }</div>
   <div class="title">
     <h1>Về Đây Anh Cứu</h1>
+    <span class="sub">đã sửa: nhận diện "Đáp án:" (không chỉ "Đáp án đúng:")</span>
   </div>
   <div class="spacer"></div>
 </header>
@@ -194,20 +185,7 @@
       </div>
     </div>
 
-    <textarea id="inputText" placeholder="Dán văn bản đề thi vào đây...
-
-Hỗ trợ code block trong câu hỏi và giải thích:
-
-Câu 1
-Đề bài: Đoạn code sau làm gì?
-```javascript
-const arr = [1, 2, 3];
-console.log(arr.map(x => x * 2));
-```
-A. In ra [1, 2, 3]
-B. In ra [2, 4, 6]
-Đáp án đúng: B
-Giải thích: Hàm map nhân đôi mỗi phần tử." spellcheck="false"></textarea>
+    <textarea id="inputText" placeholder="Dán văn bản đề thi vào đây..." spellcheck="false"></textarea>
 
     <div class="footer-bar">
       <span id="inputStats">Chưa có nội dung</span>
@@ -403,6 +381,7 @@ function extractCorrectAnswer(line) {
 }
 
 // ─── MAIN PARSER ─────────────────────────────────────────────────────────────
+// FIX: regex nhận diện đáp án giờ chấp nhận cả "Đáp án:" (không chỉ "Đáp án đúng:")
 
 function parseQuizText(text) {
   const defaultTags = document.getElementById('defaultTags').value.trim() || 'general';
@@ -412,6 +391,10 @@ function parseQuizText(text) {
   const lines = text.split('\n');
   const totalLines = lines.length;
   const questions = [];
+
+  // Regex dùng chung — đã thêm "Đáp án" (không chỉ "Đáp án đúng")
+  const ANSWER_LABEL_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:/i;
+  const ANSWER_STRIP_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:\s*/i;
 
   let i = 0;
 
@@ -454,6 +437,12 @@ function parseQuizText(text) {
     let tags          = defaultTags;
     let questionType  = defaultType;
 
+    // Xử lý trường hợp đề bài nằm cùng dòng với "Câu N:" (ví dụ: "Câu 4: Các công ty có thể...")
+    const sameLineMatch = line.match(/^(?:Câu|Question)\s+\d+\s*:\s*(.+)$/i);
+    if (sameLineMatch && sameLineMatch[1].trim()) {
+      questionRaw = sameLineMatch[1].trim();
+    }
+
     i++;
 
     while (i < totalLines) {
@@ -471,7 +460,7 @@ function parseQuizText(text) {
           const nl = lines[i].trim();
           if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(nl)) break;
           if (/^[A-D]\.\s+/i.test(nl)) break;
-          if (/^(Đáp án đúng|Correct Answer|Answer)\s*:/i.test(nl)) break;
+          if (ANSWER_LABEL_RE.test(nl)) break;
           if (/^(Giải thích|Explanation)\s*:/i.test(nl)) break;
           if (/^Tags?\s*:/i.test(nl)) break;
           if (isQuestionStart(nl)) break;
@@ -491,24 +480,39 @@ function parseQuizText(text) {
       if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(l)) { i++; continue; }
 
       if (/^[A-D]\.\s+/i.test(l)) {
-        let optText = l;
+        // Tách trường hợp đáp án bị dính ngay sau lựa chọn cuối cùng, ví dụ:
+        // "D. ... không cần tuân thủ. Đáp án: C."
+        let optLine = l;
+        let inlineAnswer = null;
+        const inlineMatch = optLine.match(/^(.*?)[.\s]+(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:\s*(.+)$/i);
+        if (inlineMatch) {
+          optLine = inlineMatch[1].trim();
+          inlineAnswer = inlineMatch[3].trim();
+        }
+
+        let optText = optLine;
         i++;
         while (i < totalLines) {
           const nl = lines[i].trim();
           if (!nl) break;
           if (/^[A-D]\.\s+/i.test(nl)) break;
-          if (/^(Đáp án đúng|Correct Answer|Answer|Giải thích|Explanation|Tags?)\s*:/i.test(nl)) break;
+          if (ANSWER_LABEL_RE.test(nl)) break;
+          if (/^(Giải thích|Explanation|Tags?)\s*:/i.test(nl)) break;
           if (isQuestionStart(nl)) break;
           if (lines[i].trim().startsWith('```')) break;
           optText += ' ' + nl;
           i++;
         }
         options.push(optText);
+
+        if (inlineAnswer) {
+          correctAnswer = extractCorrectAnswer(inlineAnswer);
+        }
         continue;
       }
 
-      if (/^(Đáp án đúng|Correct Answer|Answer)\s*:/i.test(l)) {
-        const raw = l.replace(/^(Đáp án đúng|Correct Answer|Answer)\s*:\s*/i, '').trim();
+      if (ANSWER_LABEL_RE.test(l)) {
+        const raw = l.replace(ANSWER_STRIP_RE, '').trim();
         correctAnswer = extractCorrectAnswer(raw);
         i++;
         continue;
@@ -649,19 +653,21 @@ function convert() {
   outputEl.scrollTop = 0;
 
   const multi = questions.filter(q => q.correctAnswer.length > 1).length;
+  const empty = questions.filter(q => !q.correctAnswer).length;
   const hasCode = questions.filter(q => q.questionText.includes('<pre>') || q.explanation.includes('<pre>')).length;
-  document.getElementById('resultBadge').innerHTML = `<span class="badge ok">✓ ${questions.length} câu</span>`;
+  document.getElementById('resultBadge').innerHTML = empty > 0
+    ? `<span class="badge warn">✓ ${questions.length} câu (${empty} thiếu đáp án)</span>`
+    : `<span class="badge ok">✓ ${questions.length} câu</span>`;
   document.getElementById('outputStats').textContent = `${questions.length} câu · ${(jsonStr.length/1024).toFixed(1)} KB`;
   document.getElementById('parseInfo').textContent =
-    `${multi} câu nhiều đáp án${hasCode ? ` · ${hasCode} câu có code` : ''} · ${elapsed}ms`;
+    `${multi} câu nhiều đáp án${hasCode ? ` · ${hasCode} câu có code` : ''}${empty ? ` · ⚠️ ${empty} thiếu đáp án` : ''} · ${elapsed}ms`;
   showToast(`✅ Đã chuyển ${questions.length} câu thành công`);
 }
 
 // ─── Sample data ─────────────────────────────────────────────────────────────
 
 function loadSample(type) {
-  if (type === 'basic') {
-    inputEl.value =
+  inputEl.value =
 `Câu 1
 Đề bài: What is the default data structure supported by AsyncStorage?
 Các lựa chọn:
@@ -672,94 +678,14 @@ D. Trees
 Đáp án đúng: C. Key-value pairs
 Giải thích: AsyncStorage là một hệ thống lưu trữ bất đồng bộ, bất biến, dưới dạng các cặp khóa - giá trị (key-value pairs) dành cho toàn bộ ứng dụng React Native.
 
-Câu 2
-Đề bài: Which of the following statements most accurately describes the difference between props and state in React?
-Các lựa chọn:
-A. props are used to pass data from a parent component to a child component, while state is used to manage the internal data of a component.
-B. state can be changed by the component itself, while props are read-only for the receiving component.
-C. props allow the component to automatically update the displayed data based on user interactions.
-D. state should only be passed as a parameter between components and should not be used to store internal data.
-Đáp án đúng: A và B
-Giải thích: Ý A đúng vì props truyền dữ liệu từ cha sang con, còn state quản lý dữ liệu nội bộ của component. Ý B đúng vì props có tính chất chỉ đọc (read-only) đối với component nhận, trong khi component có toàn quyền thay đổi state của chính nó.`;
-  } else {
-    inputEl.value =
-`Câu 1
-Đề bài: Đoạn code JavaScript sau in ra kết quả gì?
-\`\`\`javascript
-const arr = [1, 2, 3, 4, 5];
-const result = arr
-  .filter(x => x % 2 === 0)
-  .map(x => x * x);
-console.log(result);
-\`\`\`
-Các lựa chọn:
-A. [1, 4, 9, 16, 25]
-B. [4, 16]
-C. [2, 4]
-D. [1, 9, 25]
-Đáp án đúng: B
-Giải thích: Đầu tiên, \`filter(x => x % 2 === 0)\` lọc ra các số chẵn là [2, 4]. Sau đó \`map(x => x * x)\` bình phương từng phần tử, cho ra kết quả:
-\`\`\`javascript
-// Bước 1 - filter:
-[2, 4]
-
-// Bước 2 - map (bình phương):
-[4, 16]
-\`\`\`
-Vì vậy đáp án đúng là B.
-
-Câu 2
-Đề bài: Xem xét đoạn code Java sau. Output của chương trình là gì?
-\`\`\`java
-public class Main {
-    public static void main(String[] args) {
-        int x = 5;
-        int y = x++;
-        System.out.println("x = " + x + ", y = " + y);
-    }
-}
-\`\`\`
-Các lựa chọn:
-A. x = 5, y = 5
-B. x = 6, y = 5
-C. x = 6, y = 6
-D. x = 5, y = 6
-Đáp án đúng: B
-Giải thích: Toán tử \`x++\` là **post-increment** — nghĩa là giá trị của \`x\` được gán cho \`y\` trước (y = 5), rồi mới tăng \`x\` lên 1 (x = 6). Nếu dùng \`++x\` (pre-increment) thì cả hai đều là 6.
-\`\`\`java
-int y = x++;  // y nhận giá trị 5, sau đó x thành 6
-\`\`\`
-
-Câu 3
-Đề bài: Hook \`useReducer\` trong React Native được dùng để làm gì?
-Các lựa chọn:
-A. Quản lý state phức tạp với reducer function
-B. Gọi API bất đồng bộ
-C. Tạo animation
-D. Quản lý navigation
-Đáp án đúng: A
-Giải thích: \`useReducer\` giải quyết bài toán state phức tạp bằng cách tập trung logic vào một hàm reducer. Ví dụ:
-\`\`\`javascript
-const initialState = { count: 0 };
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'increment':
-      return { count: state.count + 1 };
-    case 'decrement':
-      return { count: state.count - 1 };
-    default:
-      return state;
-  }
-}
-
-// Sử dụng trong component:
-const [state, dispatch] = useReducer(reducer, initialState);
-dispatch({ type: 'increment' }); // count = 1
-\`\`\``;
-  }
+Câu 2: Theo học thuyết Friedman (Friedman doctrine):
+A. Đạo đức không là gì khác ngoài sự phản chiếu của văn hóa.
+B. Các chuẩn mực đạo đức của quốc gia sở tại của công ty đa quốc gia là không phù hợp để tuân theo ở nước ngoài.
+C. Doanh nghiệp không nên thực hiện các chi tiêu xã hội vượt quá những gì luật pháp quy định.
+D. Nếu một nhà quản lý thấy các công ty từ các quốc gia khác không tuân thủ chuẩn mực đạo đức, nhà quản lý đó cũng không cần tuân thủ. Đáp án: C.
+Giải thích: Học thuyết này cho rằng trách nhiệm xã hội duy nhất của doanh nghiệp là tăng lợi nhuận cho cổ đông trong khuôn khổ pháp luật.`;
   updateInputStats();
-  showToast(type === 'code' ? '📄 Đã nạp mẫu có code block' : '📄 Đã nạp mẫu cơ bản');
+  showToast('📄 Đã nạp mẫu (gồm cả định dạng "Đáp án:" dính vào lựa chọn D)');
 }
 
 updateInputStats();
