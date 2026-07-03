@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quiz → JSON</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
@@ -83,7 +84,6 @@
   }
   .config-field select:focus{outline:none;border-color:var(--amber)}
   .config-field.hidden{display:none !important}
-  .hidden{display:none !important}
 
   textarea{
     flex:1;border:none;outline:none;resize:none;padding:18px 20px;font-family:var(--mono);
@@ -123,6 +123,8 @@
   button.danger{background:transparent;color:var(--red);border-color:#5a3326}
   button.danger:hover{background:var(--red-soft)}
   button.ghost{background:transparent}
+  button:disabled{opacity:0.45;cursor:not-allowed}
+  button:disabled:hover{background:var(--panel2);border-color:var(--line)}
 
   .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;font-family:var(--mono)}
   .badge.ok{background:var(--teal-soft);color:var(--teal)}
@@ -144,14 +146,6 @@
   .json-bool{color:var(--red)}
   .json-null{color:var(--ink-faint)}
 
-  .mode-switch{display:flex;gap:2px;padding:3px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)}
-  .mode-btn{background:transparent;border:none;border-radius:6px;padding:7px 13px;font-size:12px;color:var(--ink-dim);cursor:pointer;font-family:var(--mono);white-space:nowrap;transition:all .12s}
-  .mode-btn:hover{background:#23283a;color:var(--ink)}
-  .mode-btn.active{background:var(--amber);color:#1a1206;font-weight:600}
-
-  .actions span.group{display:contents}
-  .actions span.group.hidden{display:none}
-
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
   ::-webkit-scrollbar-thumb:hover{background:#34394a}
@@ -163,6 +157,103 @@
     .panel + .panel{border-left:none;border-top:1px solid var(--line)}
     header .sub{display:none}
   }
+
+  /* ─── OCR MODAL ────────────────────────────────────────────────────── */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(6,7,11,.72);
+    backdrop-filter:blur(2px);z-index:200;align-items:flex-start;justify-content:center;
+    padding:36px 16px;overflow-y:auto;
+  }
+  .modal-overlay.show{display:flex}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    width:100%;max-width:760px;box-shadow:0 24px 60px rgba(0,0,0,.5);
+    display:flex;flex-direction:column;max-height:calc(100vh - 72px);
+  }
+  .modal-head{
+    padding:16px 20px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:10px;flex-shrink:0;
+  }
+  .modal-head .mark{
+    width:26px;height:26px;border-radius:6px;background:linear-gradient(155deg,var(--teal),#1e8f74);
+    display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+  }
+  .modal-head h2{font-size:14.5px;font-weight:600}
+  .modal-head .sub{font-size:11.5px;color:var(--ink-faint);font-family:var(--mono)}
+  .modal-head .spacer{flex:1}
+  .modal-close{background:transparent;border:none;color:var(--ink-faint);font-size:18px;padding:4px 8px;line-height:1}
+  .modal-close:hover{color:var(--ink);background:var(--panel2)}
+  .modal-body{padding:18px 20px;overflow-y:auto;flex:1}
+  .modal-foot{
+    padding:14px 20px;border-top:1px solid var(--line);display:flex;
+    align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;
+    background:var(--panel);flex-wrap:wrap;
+  }
+
+  .ocr-dropzone{
+    border:2px dashed var(--line);border-radius:8px;padding:30px 20px;text-align:center;
+    cursor:pointer;transition:all .15s;
+  }
+  .ocr-dropzone:hover,.ocr-dropzone.dragover{border-color:var(--teal);background:var(--teal-soft)}
+  .ocr-dropzone svg{opacity:.5;margin-bottom:8px}
+  .ocr-dropzone .main-text{font-size:13px;margin-bottom:3px}
+  .ocr-dropzone .sub-text{font-size:11.5px;color:var(--ink-faint);font-family:var(--mono)}
+  input[type=file]{display:none}
+
+  .ocr-config{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;
+    padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  }
+  .ocr-config .config-field{color:var(--ink-dim)}
+  .ocr-config .config-field input[type=text],
+  .ocr-config .config-field input[type=number]{
+    background:var(--bg);border-color:var(--line);width:70px;color:var(--ink);
+  }
+  .ocr-config .config-field select{background:var(--bg);border-color:var(--line)}
+  .ocr-count{margin-left:auto;font-size:11.5px;color:var(--ink-faint);font-family:var(--mono)}
+
+  .ocr-list{margin-top:14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .ocr-list-empty{padding:26px;text-align:center;color:var(--ink-faint);font-size:12.5px}
+  .ocr-item{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line-soft);
+    background:var(--bg);
+  }
+  .ocr-item:last-child{border-bottom:none}
+  .ocr-item .order-num{
+    width:24px;height:24px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);
+    color:var(--ink-dim);flex-shrink:0;
+  }
+  .ocr-item.done .order-num{background:var(--teal-soft);border-color:var(--teal);color:var(--teal)}
+  .ocr-item.error .order-num{background:var(--red-soft);border-color:var(--red);color:var(--red)}
+  .ocr-item.processing .order-num{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+  .ocr-item img{width:38px;height:38px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
+  .ocr-item .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ink-dim)}
+  .ocr-item .fstatus{font-size:10.5px;font-family:var(--mono);color:var(--ink-faint);flex-shrink:0}
+  .ocr-item.done .fstatus{color:var(--teal)}
+  .ocr-item.error .fstatus{color:var(--red)}
+  .ocr-item.processing .fstatus{color:var(--amber)}
+  .ocr-item-actions{display:flex;gap:2px;flex-shrink:0}
+  .icon-btn{
+    background:transparent;border:none;color:var(--ink-faint);padding:4px 6px;font-size:13px;
+    border-radius:4px;cursor:pointer;line-height:1;
+  }
+  .icon-btn:hover{color:var(--ink);background:var(--panel2)}
+  .icon-btn:disabled{opacity:.3;cursor:not-allowed}
+  .icon-btn.remove:hover{color:var(--red);background:var(--red-soft)}
+
+  .ocr-progress{margin-top:14px;display:none}
+  .ocr-progress .p-label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-faint);margin-bottom:6px;font-family:var(--mono)}
+  .ocr-progress .p-bar-bg{height:7px;background:var(--panel2);border-radius:99px;overflow:hidden}
+  .ocr-progress .p-bar-fill{height:100%;width:0%;background:var(--teal);transition:width .2s ease}
+
+  .ocr-preview-wrap{margin-top:14px;display:none}
+  .ocr-preview-wrap .lbl{font-size:11.5px;color:var(--ink-faint);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+  .ocr-preview{
+    width:100%;min-height:160px;max-height:260px;background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:12px;font-family:var(--mono);
+    font-size:12.5px;line-height:1.6;resize:vertical;
+  }
 </style>
 </head>
 <body>
@@ -171,45 +262,28 @@
   <div class="mark">{ }</div>
   <div class="title">
     <h1>Về Đây Anh Cứu</h1>
-    <span class="sub">Chuyển ngược JSON → Văn bản</span>
+    <span class="sub">OCR ảnh (tối đa 50 ảnh) + tự động chuẩn hóa định dạng + nhận diện "--- Card N ---"</span>
   </div>
   <div class="spacer"></div>
-  <div class="mode-switch" id="modeSwitch">
-    <button class="mode-btn active" id="modeBtnToJson" onclick="setMode('toJson')">📝→{ } Văn bản → JSON</button>
-    <button class="mode-btn" id="modeBtnToText" onclick="setMode('toText')">{ }→📝 JSON → Văn bản</button>
-  </div>
 </header>
 
 <div class="layout">
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot in"></span><span id="leftPanelLabel">Văn bản đầu vào</span></span>
+      <span class="label"><span class="dot in"></span>Văn bản đầu vào</span>
       <div class="actions">
-        <span class="group" id="sampleBtnsToJson">
-          <button class="ghost" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
-          <button class="ghost" onclick="loadSample('card')">Mẫu FlashCardVip</button>
-        </span>
-        <span class="group hidden" id="sampleBtnsToText">
-          <button class="ghost" onclick="loadJsonSample('standard')">Mẫu JSON Chuẩn</button>
-          <button class="ghost" onclick="loadJsonSample('card')">Mẫu JSON Card</button>
-        </span>
-        <button class="danger" onclick="clearAll()">Xoá</button>
+        <button class="ghost" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
+        <button class="ghost" onclick="loadSample('card')">Mẫu FlashCardVip</button>
+        <button class="success" onclick="openOcrModal()">🖼️ OCR Ảnh</button>
+        <button class="danger" onclick="clearInput()">Xoá</button>
         <button class="primary" onclick="convert()">▶ Chuyển đổi</button>
       </div>
     </div>
 
     <div class="config-bar">
-      <div class="config-field" id="formatModeField">
+      <div class="config-field">
         <label for="formatMode">Định dạng</label>
         <select id="formatMode">
-          <option value="auto" selected>Tự động nhận diện</option>
-          <option value="standard">Ngân hàng câu hỏi</option>
-          <option value="card">FlashCardVip</option>
-        </select>
-      </div>
-      <div class="config-field hidden" id="outFormatField">
-        <label for="outFormat">Định dạng xuất</label>
-        <select id="outFormat">
           <option value="auto" selected>Tự động nhận diện</option>
           <option value="standard">Ngân hàng câu hỏi</option>
           <option value="card">FlashCardVip</option>
@@ -223,13 +297,13 @@
         <label for="defaultType">Type</label>
         <input type="text" id="defaultType" value="multiple_choice">
       </div>
-      <div class="config-field" id="flashcardField">
+      <div class="config-field">
         <input type="checkbox" id="flashcard" checked>
         <label for="flashcard">isAvailableFlashcard</label>
       </div>
     </div>
 
-    <textarea id="inputText" placeholder="Dán văn bản đề thi vào đây..." spellcheck="false"></textarea>
+    <textarea id="inputText" placeholder="Dán văn bản đề thi vào đây, hoặc bấm 🖼️ OCR Ảnh để import ảnh..." spellcheck="false"></textarea>
 
     <div class="footer-bar">
       <span id="inputStats">Chưa có nội dung</span>
@@ -238,11 +312,11 @@
 
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot out"></span><span id="rightPanelLabel">JSON đầu ra</span></span>
+      <span class="label"><span class="dot out"></span>JSON đầu ra</span>
       <div class="actions">
         <span id="resultBadge"></span>
-        <button class="ghost" onclick="copyOutput()">📋 Sao chép</button>
-        <button class="success" id="downloadBtn" onclick="downloadOutput()">⬇ Tải JSON</button>
+        <button class="ghost" onclick="copyJSON()">Sao chép</button>
+        <button class="success" onclick="downloadJSON()">⬇ Tải JSON</button>
       </div>
     </div>
     <div id="outputArea" class="output-area empty">
@@ -257,12 +331,78 @@
   </div>
 </div>
 
+<!-- ─── OCR MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="ocrOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="mark">🖼️</div>
+      <div>
+        <h2>OCR ảnh → Văn bản câu hỏi</h2>
+        <div class="sub">Tối đa 50 ảnh/lần · giữ đúng thứ tự · tự động chuẩn hóa & đánh số Câu N</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="modal-close" onclick="closeOcrModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="ocr-dropzone" id="ocrDropzone">
+        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>
+        <div class="main-text">Kéo thả ảnh vào đây, hoặc bấm để chọn (tối đa 50 ảnh/lần)</div>
+        <div class="sub-text">Ảnh được thêm vào cuối danh sách, có thể sắp xếp lại thứ tự bên dưới</div>
+        <input type="file" id="ocrFileInput" accept="image/*" multiple>
+      </div>
+
+      <div class="ocr-config">
+        <div class="config-field">
+          <label for="ocrStartNum">Bắt đầu từ câu số</label>
+          <input type="number" id="ocrStartNum" value="1" min="1">
+        </div>
+        <div class="config-field">
+          <label for="ocrLang">Ngôn ngữ</label>
+          <select id="ocrLang">
+            <option value="vie+eng" selected>Việt + Anh</option>
+            <option value="vie">Tiếng Việt</option>
+            <option value="eng">English</option>
+          </select>
+        </div>
+        <div class="config-field">
+          <input type="checkbox" id="ocrNormalize" checked>
+          <label for="ocrNormalize" title="Tự động dọn dẹp xuống dòng thừa, chuẩn hóa A) A- A: thành 'A.' để khớp định dạng parser">Tự động chuẩn hóa định dạng</label>
+        </div>
+        <span class="ocr-count" id="ocrCount"></span>
+      </div>
+
+      <div class="ocr-list" id="ocrList">
+        <div class="ocr-list-empty">Chưa có ảnh nào được thêm</div>
+      </div>
+
+      <div class="ocr-progress" id="ocrProgress">
+        <div class="p-label"><span id="ocrProgressText">Đang xử lý...</span><span id="ocrProgressCount">0 / 0</span></div>
+        <div class="p-bar-bg"><div class="p-bar-fill" id="ocrProgressFill"></div></div>
+      </div>
+
+      <div class="ocr-preview-wrap" id="ocrPreviewWrap">
+        <div class="lbl">Kết quả OCR (đã đánh số, có thể sửa trước khi chèn)</div>
+        <textarea class="ocr-preview" id="ocrPreviewText"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <div style="display:flex;gap:8px">
+        <button class="ghost" onclick="clearOcrFiles()">Xoá hết ảnh</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="primary" id="ocrRunBtn" onclick="runOcrAll()" disabled>▶ Bắt đầu OCR</button>
+        <button class="success" id="ocrInsertBtn" onclick="insertOcrIntoInput()" disabled>⬇ Chèn vào ô nhập</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 let parsedJSON = null;
-let generatedText = null;
-let appMode = 'toJson';
 const inputEl = document.getElementById('inputText');
 const outputEl = document.getElementById('outputArea');
 
@@ -271,8 +411,8 @@ inputEl.addEventListener('input', updateInputStats);
 function updateConfigVisibility() {
   const mode = document.getElementById('formatMode').value;
   const isCardMode = mode === 'card';
-  document.getElementById('tagsField').classList.toggle('hidden', isCardMode || appMode !== 'toJson');
-  document.getElementById('typeField').classList.toggle('hidden', isCardMode || appMode !== 'toJson');
+  document.getElementById('tagsField').classList.toggle('hidden', isCardMode);
+  document.getElementById('typeField').classList.toggle('hidden', isCardMode);
 
   const flashcardEl = document.getElementById('flashcard');
   if (isCardMode) {
@@ -298,51 +438,15 @@ function updateInputStats() {
     `${lines} dòng · ${chars} ký tự${rough ? ` · ~${rough} câu` : ''}${codeBlocks >= 1 ? ` · ${Math.floor(codeBlocks)} code block` : ''}`;
 }
 
-function resetOutputPanel() {
-  outputEl.className = 'output-area empty';
-  if (appMode === 'toJson') {
-    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
-  } else {
-    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập JSON và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả văn bản sẽ hiện ở đây, có thể chỉnh sửa lại đề thi.</div>';
-  }
-}
-
-function clearAll() {
+function clearInput() {
   inputEl.value = '';
-  resetOutputPanel();
+  outputEl.className = 'output-area empty';
+  outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
   parsedJSON = null;
-  generatedText = null;
   document.getElementById('resultBadge').innerHTML = '';
   document.getElementById('outputStats').textContent = '—';
   document.getElementById('parseInfo').textContent = '';
   updateInputStats();
-}
-
-function setMode(mode) {
-  if (appMode === mode) return;
-  appMode = mode;
-  document.getElementById('modeBtnToJson').classList.toggle('active', mode === 'toJson');
-  document.getElementById('modeBtnToText').classList.toggle('active', mode === 'toText');
-
-  document.getElementById('leftPanelLabel').textContent = mode === 'toJson' ? 'Văn bản đầu vào' : 'JSON đầu vào';
-  document.getElementById('rightPanelLabel').textContent = mode === 'toJson' ? 'JSON đầu ra' : 'Văn bản đầu ra';
-  inputEl.placeholder = mode === 'toJson' ? 'Dán văn bản đề thi vào đây...' : 'Dán mảng JSON câu hỏi vào đây...';
-  document.getElementById('downloadBtn').innerHTML = mode === 'toJson' ? '⬇ Tải JSON' : '⬇ Tải văn bản';
-
-  document.getElementById('sampleBtnsToJson').classList.toggle('hidden', mode !== 'toJson');
-  document.getElementById('sampleBtnsToText').classList.toggle('hidden', mode !== 'toText');
-
-  document.getElementById('formatModeField').classList.toggle('hidden', mode !== 'toJson');
-  document.getElementById('outFormatField').classList.toggle('hidden', mode !== 'toText');
-  document.getElementById('flashcardField').classList.toggle('hidden', mode !== 'toJson');
-
-  if (mode === 'toJson') updateConfigVisibility();
-  else {
-    document.getElementById('tagsField').classList.add('hidden');
-    document.getElementById('typeField').classList.add('hidden');
-  }
-
-  clearAll();
 }
 
 function showToast(msg, dur = 2200) {
@@ -352,36 +456,22 @@ function showToast(msg, dur = 2200) {
   setTimeout(() => t.classList.remove('show'), dur);
 }
 
-function copyOutput() {
-  const data = appMode === 'toText'
-    ? generatedText
-    : (parsedJSON ? JSON.stringify(parsedJSON, null, 2) : null);
-  if (!data) { showToast('Chưa có dữ liệu để sao chép'); return; }
-  navigator.clipboard.writeText(data)
-    .then(() => showToast('✅ Đã sao chép'))
+function copyJSON() {
+  if (!parsedJSON) { showToast('Chưa có dữ liệu để sao chép'); return; }
+  navigator.clipboard.writeText(JSON.stringify(parsedJSON, null, 2))
+    .then(() => showToast('✅ Đã sao chép JSON'))
     .catch(() => showToast('❌ Không thể sao chép'));
 }
 
-function downloadOutput() {
-  if (appMode === 'toText') {
-    if (!generatedText) { showToast('Chưa có dữ liệu để tải'); return; }
-    const blob = new Blob([generatedText], {type: 'text/plain;charset=utf-8'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'questions_' + Date.now() + '.txt';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('✅ Đã tải file văn bản');
-  } else {
-    if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
-    const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'questions_' + Date.now() + '.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('✅ Đã tải file JSON');
-  }
+function downloadJSON() {
+  if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
+  const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'questions_' + Date.now() + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('✅ Đã tải file JSON');
 }
 
 // ─── CORE: xử lý code blocks ────────────────────────────────────────────────
@@ -839,7 +929,7 @@ function syntaxHighlight(json) {
   );
 }
 
-function convertToJson() {
+function convert() {
   const text = inputEl.value.trim();
   if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
 
@@ -860,7 +950,6 @@ function convertToJson() {
   }
 
   parsedJSON = questions;
-  generatedText = null;
   const jsonStr = JSON.stringify(questions, null, 2);
   const fmtLabel = format === 'card' ? 'Card' : 'Chuẩn';
 
@@ -889,169 +978,6 @@ function convertToJson() {
   document.getElementById('parseInfo').textContent =
     `${multi} câu nhiều đáp án${hasCode ? ` · ${hasCode} câu có code` : ''}${empty ? ` · ⚠️ ${empty} thiếu đáp án` : ''} · ${elapsed}ms`;
   showToast(`✅ Đã chuyển ${questions.length} câu thành công (định dạng: ${fmtLabel})`);
-}
-
-// ─── PHẦN MỚI: chuyển ngược JSON → Văn bản ──────────────────────────────────
-
-function decodeEntities(str) {
-  return str.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-}
-
-function inlineHtmlToText(str) {
-  str = str.replace(/<strong>([\s\S]*?)<\/strong>/g, '**$1**');
-  str = str.replace(/<code>([\s\S]*?)<\/code>/g, '`$1`');
-  return decodeEntities(str);
-}
-
-// Chuyển một chuỗi HTML (như questionText / explanation) thành mảng các dòng
-// văn bản thuần, khôi phục lại các code block dạng ```lang ... ```
-function htmlToLines(html) {
-  if (!html) return [];
-  const codeBlocks = [];
-  let working = html.replace(
-    /<pre><code(?:\s+class="language-([a-zA-Z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
-    (m, lang, code) => {
-      const idx = codeBlocks.length;
-      codeBlocks.push({ lang: lang || '', code: decodeEntities(code) });
-      return `@@CODEBLOCK_${idx}@@`;
-    }
-  );
-
-  const rawLines = working.split('<br>');
-  const lines = [];
-  for (const rl of rawLines) {
-    const trimmed = rl.trim();
-    if (!trimmed) continue;
-    const cbMatch = trimmed.match(/^@@CODEBLOCK_(\d+)@@$/);
-    if (cbMatch) {
-      const cb = codeBlocks[parseInt(cbMatch[1], 10)];
-      lines.push('```' + (cb.lang || ''));
-      const codeLines = cb.code.replace(/\n$/, '').split('\n');
-      for (const cl of codeLines) lines.push(cl);
-      lines.push('```');
-    } else {
-      lines.push(inlineHtmlToText(trimmed));
-    }
-  }
-  return lines;
-}
-
-// Tách phần đề bài và phần các lựa chọn (A. .. E.) từ mảng dòng
-function splitQuestionAndOptions(lines) {
-  const idx = lines.findIndex(l => /^[A-E]\.\s/.test(l));
-  if (idx === -1) return { questionLines: lines, options: [] };
-  return { questionLines: lines.slice(0, idx), options: lines.slice(idx) };
-}
-
-function generateStandardText(questions) {
-  const blocks = questions.map((q, i) => {
-    const lines = htmlToLines(q.questionText);
-    const { questionLines, options } = splitQuestionAndOptions(lines);
-    const explLines = htmlToLines(q.explanation);
-
-    let block = `Câu ${i + 1}\n`;
-    block += `Đề bài: ${questionLines.join('\n')}\n`;
-    if (options.length) {
-      block += `Các lựa chọn:\n${options.join('\n')}\n`;
-    }
-    block += `Đáp án đúng: ${q.correctAnswer || ''}\n`;
-    if (explLines.length) {
-      block += `Giải thích: ${explLines.join('\n')}\n`;
-    }
-    if (q.tags) block += `Tags: ${q.tags}\n`;
-    if (q.questionType) block += `Type: ${q.questionType}\n`;
-    return block.trim();
-  });
-  return blocks.join('\n\n');
-}
-
-function generateCardText(questions) {
-  const blocks = questions.map((q, i) => {
-    const lines = htmlToLines(q.questionText);
-    const { questionLines, options } = splitQuestionAndOptions(lines);
-
-    let block = `--- Card ${i} ---\n`;
-    block += `Q: ${questionLines.join('\n')}\n`;
-    if (options.length) block += options.join('\n') + '\n';
-
-    const ans = (q.correctAnswer || '').trim();
-    let answerLine = ans;
-    if (ans) {
-      const escaped = ans.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const matchOpt = options.find(o => new RegExp('^' + escaped + '\\.\\s', 'i').test(o));
-      if (matchOpt) answerLine = matchOpt;
-    }
-    block += `A: ${answerLine}`;
-    return block;
-  });
-  return blocks.join('\n');
-}
-
-function detectJsonFormat(questions) {
-  const mode = document.getElementById('outFormat').value;
-  if (mode !== 'auto') return mode;
-  if (!questions.length) return 'standard';
-  const q0 = questions[0];
-  if ('questionType' in q0 || 'tags' in q0 || 'explanation' in q0) return 'standard';
-  return 'card';
-}
-
-function convertToText() {
-  const text = inputEl.value.trim();
-  if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
-
-  const start = performance.now();
-  let questions;
-  try {
-    questions = JSON.parse(text);
-    if (!Array.isArray(questions)) throw new Error('JSON gốc phải là một mảng (array) các câu hỏi.');
-  } catch (e) {
-    outputEl.className = 'output-area';
-    outputEl.textContent = '❌ Lỗi phân tích JSON: ' + e.message;
-    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
-    document.getElementById('outputStats').textContent = '—';
-    document.getElementById('parseInfo').textContent = '';
-    return;
-  }
-
-  const format = detectJsonFormat(questions);
-  let resultText;
-  try {
-    resultText = format === 'card' ? generateCardText(questions) : generateStandardText(questions);
-  } catch (e) {
-    outputEl.className = 'output-area';
-    outputEl.textContent = '❌ Lỗi khi tạo văn bản: ' + e.message;
-    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
-    return;
-  }
-  const elapsed = (performance.now() - start).toFixed(1);
-
-  generatedText = resultText;
-  parsedJSON = null;
-
-  if (!questions.length) {
-    outputEl.className = 'output-area empty';
-    outputEl.innerHTML = `<div><p>⚠️ Mảng JSON rỗng, không có câu hỏi nào.</p></div>`;
-    document.getElementById('resultBadge').innerHTML = `<span class="badge warn">0 câu</span>`;
-    document.getElementById('outputStats').textContent = '—';
-    document.getElementById('parseInfo').textContent = '';
-    return;
-  }
-
-  outputEl.className = 'output-area';
-  outputEl.textContent = resultText;
-  outputEl.scrollTop = 0;
-
-  const fmtLabel = format === 'card' ? 'Card' : 'Chuẩn';
-  document.getElementById('resultBadge').innerHTML = `<span class="badge ok">✓ ${questions.length} câu</span> <span class="badge fmt">${fmtLabel}</span>`;
-  document.getElementById('outputStats').textContent = `${questions.length} câu · ${(resultText.length/1024).toFixed(1)} KB`;
-  document.getElementById('parseInfo').textContent = `${elapsed}ms`;
-  showToast(`✅ Đã chuyển ${questions.length} câu thành văn bản (định dạng: ${fmtLabel})`);
-}
-
-function convert() {
-  if (appMode === 'toText') convertToText();
-  else convertToJson();
 }
 
 // ─── Sample data ─────────────────────────────────────────────────────────────
@@ -1105,36 +1031,309 @@ Giải thích: Học thuyết này cho rằng trách nhiệm xã hội duy nhấ
   showToast('📄 Đã nạp mẫu (gồm cả định dạng "Đáp án:" dính vào lựa chọn D)');
 }
 
-function loadJsonSample(type) {
-  document.getElementById('outFormat').value = 'auto';
-  const sample = type === 'card' ? [
-    {
-      questionText: "A bond is issued at par value when:<br>A. The bond pays no interest.<br>B. The bond is not between interest payment dates.<br>C. Straight line amortization is used by the company.<br>D. The market rate of interest is the same as the contract rate of interest.<br>E. The bond is callable.<br>",
-      correctAnswer: "D",
-      isAvailableFlashcard: true
-    },
-    {
-      questionText: "A bond sells at a discount when the:<br>A. Contract rate is above the market rate.<br>B. Contract rate is equal to the market rate.<br>C. Contract rate is below the market rate.<br>D. Bond has a short-term life.<br>E. Bond pays interest only once a year.<br>",
-      correctAnswer: "C",
-      isAvailableFlashcard: true
-    }
-  ] : [
-    {
-      questionText: "What is the default data structure supported by AsyncStorage?<br>A. Arrays<br>B. Buffers<br>C. Key-value pairs<br>D. Trees<br>",
-      questionType: "multiple_choice",
-      correctAnswer: "C",
-      explanation: "AsyncStorage là một hệ thống lưu trữ bất đồng bộ, bất biến, dưới dạng các cặp khóa - giá trị (key-value pairs) dành cho toàn bộ ứng dụng React Native.",
-      tags: "MMA301",
-      isAvailableFlashcard: true
-    }
-  ];
-  inputEl.value = JSON.stringify(sample, null, 2);
-  updateInputStats();
-  showToast(type === 'card' ? '📄 Đã nạp mẫu JSON định dạng Card' : '📄 Đã nạp mẫu JSON định dạng Chuẩn');
-}
-
 updateConfigVisibility();
 updateInputStats();
+
+// ─── OCR MODULE ──────────────────────────────────────────────────────────────
+// Import tối đa 50 ảnh/lần, giữ nguyên thứ tự thêm vào (có thể sắp xếp lại
+// bằng nút ▲▼), OCR tuần tự bằng Tesseract.js, tự động CHUẨN HÓA kết quả
+// (gộp dòng bị ngắt giữa câu, quy các kiểu "A)"/"A-"/"A:" về đúng "A. ")
+// rồi ghép thành "Câu 1: ...", "Câu 2: ..." để chèn thẳng vào ô nhập bên trái,
+// đúng định dạng mà parser bên trên hiểu được.
+
+const OCR_MAX_FILES = 50;
+
+let ocrFiles = []; // { id, file, url, status: 'pending'|'processing'|'done'|'error', text }
+let ocrIdSeq = 0;
+let ocrRunning = false;
+
+const ocrOverlay   = document.getElementById('ocrOverlay');
+const ocrDropzone  = document.getElementById('ocrDropzone');
+const ocrFileInput = document.getElementById('ocrFileInput');
+const ocrListEl    = document.getElementById('ocrList');
+const ocrCountEl   = document.getElementById('ocrCount');
+const ocrRunBtn    = document.getElementById('ocrRunBtn');
+const ocrInsertBtn = document.getElementById('ocrInsertBtn');
+const ocrProgress  = document.getElementById('ocrProgress');
+const ocrProgressText  = document.getElementById('ocrProgressText');
+const ocrProgressCount = document.getElementById('ocrProgressCount');
+const ocrProgressFill  = document.getElementById('ocrProgressFill');
+const ocrPreviewWrap = document.getElementById('ocrPreviewWrap');
+const ocrPreviewText = document.getElementById('ocrPreviewText');
+
+function openOcrModal() {
+  ocrOverlay.classList.add('show');
+}
+function closeOcrModal() {
+  if (ocrRunning) {
+    if (!confirm('OCR đang chạy dở. Đóng cửa sổ sẽ không dừng tiến trình nền. Vẫn đóng?')) return;
+  }
+  ocrOverlay.classList.remove('show');
+}
+ocrOverlay.addEventListener('click', (e) => { if (e.target === ocrOverlay) closeOcrModal(); });
+
+ocrDropzone.addEventListener('click', () => ocrFileInput.click());
+ocrDropzone.addEventListener('dragover', (e) => { e.preventDefault(); ocrDropzone.classList.add('dragover'); });
+ocrDropzone.addEventListener('dragleave', () => ocrDropzone.classList.remove('dragover'));
+ocrDropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  ocrDropzone.classList.remove('dragover');
+  if (e.dataTransfer.files) addOcrFiles(Array.from(e.dataTransfer.files));
+});
+ocrFileInput.addEventListener('change', (e) => {
+  if (e.target.files) addOcrFiles(Array.from(e.target.files));
+  ocrFileInput.value = '';
+});
+
+function addOcrFiles(newFiles) {
+  const imgs = newFiles.filter(f => f.type.startsWith('image/'));
+  if (imgs.length === 0) { showToast('⚠️ Vui lòng chọn file ảnh'); return; }
+
+  const remaining = OCR_MAX_FILES - ocrFiles.length;
+  if (remaining <= 0) {
+    showToast(`⚠️ Đã đạt giới hạn tối đa ${OCR_MAX_FILES} ảnh, hãy xoá bớt trước khi thêm ảnh mới`);
+    return;
+  }
+
+  const toAdd = imgs.slice(0, remaining);
+  toAdd.forEach(file => {
+    ocrFiles.push({ id: ++ocrIdSeq, file, url: URL.createObjectURL(file), status: 'pending', text: '' });
+  });
+  renderOcrList();
+
+  if (imgs.length > toAdd.length) {
+    showToast(`➕ Đã thêm ${toAdd.length} ảnh (đạt giới hạn ${OCR_MAX_FILES}), bỏ qua ${imgs.length - toAdd.length} ảnh dư`);
+  } else {
+    showToast(`➕ Đã thêm ${toAdd.length} ảnh (tổng ${ocrFiles.length}/${OCR_MAX_FILES})`);
+  }
+}
+
+function moveOcrFile(idx, dir) {
+  const target = idx + dir;
+  if (target < 0 || target >= ocrFiles.length) return;
+  [ocrFiles[idx], ocrFiles[target]] = [ocrFiles[target], ocrFiles[idx]];
+  renderOcrList();
+}
+
+function removeOcrFile(idx) {
+  URL.revokeObjectURL(ocrFiles[idx].url);
+  ocrFiles.splice(idx, 1);
+  renderOcrList();
+}
+
+function clearOcrFiles() {
+  if (ocrRunning) { showToast('⚠️ Đang OCR, vui lòng đợi xong'); return; }
+  ocrFiles.forEach(f => URL.revokeObjectURL(f.url));
+  ocrFiles = [];
+  renderOcrList();
+  ocrProgress.style.display = 'none';
+  ocrPreviewWrap.style.display = 'none';
+  ocrInsertBtn.disabled = true;
+  ocrPreviewText.value = '';
+}
+
+function statusLabel(s) {
+  return s === 'done' ? 'Xong' : s === 'processing' ? 'Đang chạy...' : s === 'error' ? 'Lỗi' : 'Chờ';
+}
+
+function renderOcrList() {
+  ocrCountEl.textContent = ocrFiles.length ? `${ocrFiles.length} / ${OCR_MAX_FILES} ảnh` : `Tối đa ${OCR_MAX_FILES} ảnh`;
+  ocrRunBtn.disabled = ocrFiles.length === 0 || ocrRunning;
+
+  if (ocrFiles.length === 0) {
+    ocrListEl.innerHTML = '<div class="ocr-list-empty">Chưa có ảnh nào được thêm</div>';
+    return;
+  }
+
+  ocrListEl.innerHTML = '';
+  ocrFiles.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = `ocr-item ${item.status}`;
+
+    const num = document.createElement('div');
+    num.className = 'order-num';
+    num.textContent = idx + 1;
+
+    const img = document.createElement('img');
+    img.src = item.url;
+
+    const fname = document.createElement('div');
+    fname.className = 'fname';
+    fname.textContent = item.file.name;
+
+    const fstatus = document.createElement('div');
+    fstatus.className = 'fstatus';
+    fstatus.textContent = statusLabel(item.status);
+
+    const actions = document.createElement('div');
+    actions.className = 'ocr-item-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'icon-btn';
+    upBtn.title = 'Di chuyển lên';
+    upBtn.textContent = '▲';
+    upBtn.disabled = idx === 0 || ocrRunning;
+    upBtn.onclick = () => moveOcrFile(idx, -1);
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'icon-btn';
+    downBtn.title = 'Di chuyển xuống';
+    downBtn.textContent = '▼';
+    downBtn.disabled = idx === ocrFiles.length - 1 || ocrRunning;
+    downBtn.onclick = () => moveOcrFile(idx, 1);
+
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'icon-btn remove';
+    rmBtn.title = 'Xoá ảnh này';
+    rmBtn.textContent = '✕';
+    rmBtn.disabled = ocrRunning;
+    rmBtn.onclick = () => removeOcrFile(idx);
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(rmBtn);
+
+    row.appendChild(num);
+    row.appendChild(img);
+    row.appendChild(fname);
+    row.appendChild(fstatus);
+    row.appendChild(actions);
+    ocrListEl.appendChild(row);
+  });
+}
+
+// ─── Chuẩn hóa văn bản OCR để khớp định dạng parser ─────────────────────────
+// Tesseract thường trả về:
+//  - Các dòng bị ngắt giữa chừng do ảnh xuống dòng tự nhiên (word-wrap trong ảnh)
+//    → cần gộp lại thành 1 dòng liên tục cho câu hỏi/từng lựa chọn.
+//  - Ký hiệu lựa chọn không đồng nhất: "A)", "A-", "A :", "a.", đôi khi thiếu
+//    khoảng trắng "A.Option" → parser cần đúng dạng "A. Option".
+//  - Khoảng trắng thừa, dòng trống rải rác, khoảng trắng đầu/cuối dòng.
+
+function normalizeOptionMarker(line) {
+  // "A)" "A-" "A:" "A ." "a." "A.Option" (thiếu khoảng trắng) -> "A. Option"
+  const m = line.match(/^\s*([A-Ea-e])\s*[\.\)\:\-]\s*(.*)$/);
+  if (m) {
+    return m[1].toUpperCase() + '. ' + m[2].trim();
+  }
+  return line;
+}
+
+function normalizeOcrText(raw) {
+  if (!raw) return '';
+
+  // Tách dòng, bỏ khoảng trắng thừa và dòng trống
+  const rawLines = raw
+    .split('\n')
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(l => l.length > 0);
+
+  if (rawLines.length === 0) return '';
+
+  // Các mốc nhận diện để KHÔNG gộp dòng vào dòng trước (mỗi mốc bắt đầu 1 dòng mới)
+  const NEW_LINE_RE = /^([A-E]\s*[\.\)\:\-]|Đáp án đúng|Đáp án|Correct Answer|Answer|Giải thích|Explanation|Tags?|Câu\s+\d+|Question\s+\d+|Loại câu hỏi|Type)\s*[:\.]?/i;
+
+  const merged = [];
+  for (const l of rawLines) {
+    const normalized = normalizeOptionMarker(l);
+    const startsNewLine = NEW_LINE_RE.test(normalized) || merged.length === 0;
+    if (startsNewLine) {
+      merged.push(normalized);
+    } else {
+      // Dòng tiếp nối (do ảnh bị word-wrap) -> gộp vào dòng trước đó
+      merged[merged.length - 1] += ' ' + normalized;
+    }
+  }
+
+  return merged.join('\n').trim();
+}
+
+// Loại bỏ nhãn "Câu N:"/"Question N:" nếu OCR đã đọc luôn nhãn này trong ảnh,
+// để tránh bị đánh số trùng khi ta tự thêm "Câu N:" phía trước.
+function stripLeadingQuestionLabel(text) {
+  return text.replace(/^(Câu|Question)\s+\d+\s*[:\.]?\s*/i, '');
+}
+
+async function runOcrAll() {
+  if (ocrFiles.length === 0 || ocrRunning) return;
+  ocrRunning = true;
+  ocrRunBtn.disabled = true;
+  ocrInsertBtn.disabled = true;
+  ocrProgress.style.display = 'block';
+  ocrPreviewWrap.style.display = 'none';
+  renderOcrList();
+
+  const lang = document.getElementById('ocrLang').value;
+  const startNum = parseInt(document.getElementById('ocrStartNum').value, 10) || 1;
+  const doNormalize = document.getElementById('ocrNormalize').checked;
+  const total = ocrFiles.length;
+
+  ocrProgressText.textContent = 'Đang tải mô hình nhận dạng...';
+  ocrProgressFill.style.width = '0%';
+  ocrProgressCount.textContent = `0 / ${total}`;
+
+  let worker;
+  try {
+    worker = await Tesseract.createWorker(lang);
+  } catch (err) {
+    showToast('❌ Không thể tải mô hình OCR: ' + err.message);
+    ocrRunning = false;
+    ocrRunBtn.disabled = false;
+    renderOcrList();
+    return;
+  }
+
+  for (let i = 0; i < ocrFiles.length; i++) {
+    ocrFiles[i].status = 'processing';
+    renderOcrList();
+    ocrProgressText.textContent = `Đang nhận dạng ảnh ${i + 1} / ${total} (${ocrFiles[i].file.name})`;
+    try {
+      const { data } = await worker.recognize(ocrFiles[i].file);
+      ocrFiles[i].text = (data.text || '').trim();
+      ocrFiles[i].status = 'done';
+    } catch (err) {
+      console.error('Lỗi OCR ảnh', ocrFiles[i].file.name, err);
+      ocrFiles[i].text = '(Lỗi nhận dạng ảnh này)';
+      ocrFiles[i].status = 'error';
+    }
+    const pct = Math.round(((i + 1) / total) * 100);
+    ocrProgressFill.style.width = pct + '%';
+    ocrProgressCount.textContent = `${i + 1} / ${total}`;
+    renderOcrList();
+  }
+
+  await worker.terminate();
+
+  const combined = ocrFiles.map((item, idx) => {
+    let body = item.text || '';
+    if (item.status !== 'error') {
+      body = doNormalize ? normalizeOcrText(body) : body.trim();
+      body = stripLeadingQuestionLabel(body);
+    }
+    return `Câu ${startNum + idx}: ${body}`;
+  }).join('\n\n');
+
+  ocrPreviewText.value = combined;
+  ocrPreviewWrap.style.display = 'block';
+  ocrProgressText.textContent = 'Hoàn tất!';
+
+  ocrRunning = false;
+  ocrRunBtn.disabled = false;
+  ocrInsertBtn.disabled = false;
+  renderOcrList();
+  showToast(`✅ Đã OCR xong ${total} ảnh`);
+}
+
+function insertOcrIntoInput() {
+  const text = ocrPreviewText.value.trim();
+  if (!text) { showToast('⚠️ Chưa có kết quả OCR để chèn'); return; }
+
+  const current = inputEl.value;
+  inputEl.value = current.trim() ? (current.trim() + '\n\n' + text) : text;
+  updateInputStats();
+  closeOcrModal();
+  showToast('✅ Đã chèn văn bản OCR vào ô nhập, có thể bấm ▶ Chuyển đổi');
+}
 </script>
 </body>
 </html>
