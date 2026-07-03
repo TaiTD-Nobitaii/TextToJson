@@ -83,6 +83,7 @@
   }
   .config-field select:focus{outline:none;border-color:var(--amber)}
   .config-field.hidden{display:none !important}
+  .hidden{display:none !important}
 
   textarea{
     flex:1;border:none;outline:none;resize:none;padding:18px 20px;font-family:var(--mono);
@@ -143,6 +144,14 @@
   .json-bool{color:var(--red)}
   .json-null{color:var(--ink-faint)}
 
+  .mode-switch{display:flex;gap:2px;padding:3px;background:var(--panel2);border-radius:8px;border:1px solid var(--line)}
+  .mode-btn{background:transparent;border:none;border-radius:6px;padding:7px 13px;font-size:12px;color:var(--ink-dim);cursor:pointer;font-family:var(--mono);white-space:nowrap;transition:all .12s}
+  .mode-btn:hover{background:#23283a;color:var(--ink)}
+  .mode-btn.active{background:var(--amber);color:#1a1206;font-weight:600}
+
+  .actions span.group{display:contents}
+  .actions span.group.hidden{display:none}
+
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
   ::-webkit-scrollbar-thumb:hover{background:#34394a}
@@ -162,27 +171,45 @@
   <div class="mark">{ }</div>
   <div class="title">
     <h1>Về Đây Anh Cứu</h1>
-    <span class="sub">đã thêm: nhận diện định dạng "--- Card N ---" (Q: / A-E / A:)</span>
+    <span class="sub">Chuyển ngược JSON → Văn bản</span>
   </div>
   <div class="spacer"></div>
+  <div class="mode-switch" id="modeSwitch">
+    <button class="mode-btn active" id="modeBtnToJson" onclick="setMode('toJson')">📝→{ } Văn bản → JSON</button>
+    <button class="mode-btn" id="modeBtnToText" onclick="setMode('toText')">{ }→📝 JSON → Văn bản</button>
+  </div>
 </header>
 
 <div class="layout">
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot in"></span>Văn bản đầu vào</span>
+      <span class="label"><span class="dot in"></span><span id="leftPanelLabel">Văn bản đầu vào</span></span>
       <div class="actions">
-        <button class="ghost" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
-        <button class="ghost" onclick="loadSample('card')">Mẫu FlashCardVip</button>
-        <button class="danger" onclick="clearInput()">Xoá</button>
+        <span class="group" id="sampleBtnsToJson">
+          <button class="ghost" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
+          <button class="ghost" onclick="loadSample('card')">Mẫu FlashCardVip</button>
+        </span>
+        <span class="group hidden" id="sampleBtnsToText">
+          <button class="ghost" onclick="loadJsonSample('standard')">Mẫu JSON Chuẩn</button>
+          <button class="ghost" onclick="loadJsonSample('card')">Mẫu JSON Card</button>
+        </span>
+        <button class="danger" onclick="clearAll()">Xoá</button>
         <button class="primary" onclick="convert()">▶ Chuyển đổi</button>
       </div>
     </div>
 
     <div class="config-bar">
-      <div class="config-field">
+      <div class="config-field" id="formatModeField">
         <label for="formatMode">Định dạng</label>
         <select id="formatMode">
+          <option value="auto" selected>Tự động nhận diện</option>
+          <option value="standard">Ngân hàng câu hỏi</option>
+          <option value="card">FlashCardVip</option>
+        </select>
+      </div>
+      <div class="config-field hidden" id="outFormatField">
+        <label for="outFormat">Định dạng xuất</label>
+        <select id="outFormat">
           <option value="auto" selected>Tự động nhận diện</option>
           <option value="standard">Ngân hàng câu hỏi</option>
           <option value="card">FlashCardVip</option>
@@ -196,7 +223,7 @@
         <label for="defaultType">Type</label>
         <input type="text" id="defaultType" value="multiple_choice">
       </div>
-      <div class="config-field">
+      <div class="config-field" id="flashcardField">
         <input type="checkbox" id="flashcard" checked>
         <label for="flashcard">isAvailableFlashcard</label>
       </div>
@@ -211,11 +238,11 @@
 
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot out"></span>JSON đầu ra</span>
+      <span class="label"><span class="dot out"></span><span id="rightPanelLabel">JSON đầu ra</span></span>
       <div class="actions">
         <span id="resultBadge"></span>
-        <button class="ghost" onclick="copyJSON()">📋 Sao chép</button>
-        <button class="success" onclick="downloadJSON()">⬇ Tải JSON</button>
+        <button class="ghost" onclick="copyOutput()">📋 Sao chép</button>
+        <button class="success" id="downloadBtn" onclick="downloadOutput()">⬇ Tải JSON</button>
       </div>
     </div>
     <div id="outputArea" class="output-area empty">
@@ -234,6 +261,8 @@
 
 <script>
 let parsedJSON = null;
+let generatedText = null;
+let appMode = 'toJson';
 const inputEl = document.getElementById('inputText');
 const outputEl = document.getElementById('outputArea');
 
@@ -242,8 +271,8 @@ inputEl.addEventListener('input', updateInputStats);
 function updateConfigVisibility() {
   const mode = document.getElementById('formatMode').value;
   const isCardMode = mode === 'card';
-  document.getElementById('tagsField').classList.toggle('hidden', isCardMode);
-  document.getElementById('typeField').classList.toggle('hidden', isCardMode);
+  document.getElementById('tagsField').classList.toggle('hidden', isCardMode || appMode !== 'toJson');
+  document.getElementById('typeField').classList.toggle('hidden', isCardMode || appMode !== 'toJson');
 
   const flashcardEl = document.getElementById('flashcard');
   if (isCardMode) {
@@ -269,15 +298,51 @@ function updateInputStats() {
     `${lines} dòng · ${chars} ký tự${rough ? ` · ~${rough} câu` : ''}${codeBlocks >= 1 ? ` · ${Math.floor(codeBlocks)} code block` : ''}`;
 }
 
-function clearInput() {
-  inputEl.value = '';
+function resetOutputPanel() {
   outputEl.className = 'output-area empty';
-  outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
+  if (appMode === 'toJson') {
+    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
+  } else {
+    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập JSON và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả văn bản sẽ hiện ở đây, có thể chỉnh sửa lại đề thi.</div>';
+  }
+}
+
+function clearAll() {
+  inputEl.value = '';
+  resetOutputPanel();
   parsedJSON = null;
+  generatedText = null;
   document.getElementById('resultBadge').innerHTML = '';
   document.getElementById('outputStats').textContent = '—';
   document.getElementById('parseInfo').textContent = '';
   updateInputStats();
+}
+
+function setMode(mode) {
+  if (appMode === mode) return;
+  appMode = mode;
+  document.getElementById('modeBtnToJson').classList.toggle('active', mode === 'toJson');
+  document.getElementById('modeBtnToText').classList.toggle('active', mode === 'toText');
+
+  document.getElementById('leftPanelLabel').textContent = mode === 'toJson' ? 'Văn bản đầu vào' : 'JSON đầu vào';
+  document.getElementById('rightPanelLabel').textContent = mode === 'toJson' ? 'JSON đầu ra' : 'Văn bản đầu ra';
+  inputEl.placeholder = mode === 'toJson' ? 'Dán văn bản đề thi vào đây...' : 'Dán mảng JSON câu hỏi vào đây...';
+  document.getElementById('downloadBtn').innerHTML = mode === 'toJson' ? '⬇ Tải JSON' : '⬇ Tải văn bản';
+
+  document.getElementById('sampleBtnsToJson').classList.toggle('hidden', mode !== 'toJson');
+  document.getElementById('sampleBtnsToText').classList.toggle('hidden', mode !== 'toText');
+
+  document.getElementById('formatModeField').classList.toggle('hidden', mode !== 'toJson');
+  document.getElementById('outFormatField').classList.toggle('hidden', mode !== 'toText');
+  document.getElementById('flashcardField').classList.toggle('hidden', mode !== 'toJson');
+
+  if (mode === 'toJson') updateConfigVisibility();
+  else {
+    document.getElementById('tagsField').classList.add('hidden');
+    document.getElementById('typeField').classList.add('hidden');
+  }
+
+  clearAll();
 }
 
 function showToast(msg, dur = 2200) {
@@ -287,22 +352,36 @@ function showToast(msg, dur = 2200) {
   setTimeout(() => t.classList.remove('show'), dur);
 }
 
-function copyJSON() {
-  if (!parsedJSON) { showToast('Chưa có dữ liệu để sao chép'); return; }
-  navigator.clipboard.writeText(JSON.stringify(parsedJSON, null, 2))
-    .then(() => showToast('✅ Đã sao chép JSON'))
+function copyOutput() {
+  const data = appMode === 'toText'
+    ? generatedText
+    : (parsedJSON ? JSON.stringify(parsedJSON, null, 2) : null);
+  if (!data) { showToast('Chưa có dữ liệu để sao chép'); return; }
+  navigator.clipboard.writeText(data)
+    .then(() => showToast('✅ Đã sao chép'))
     .catch(() => showToast('❌ Không thể sao chép'));
 }
 
-function downloadJSON() {
-  if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
-  const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'questions_' + Date.now() + '.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToast('✅ Đã tải file JSON');
+function downloadOutput() {
+  if (appMode === 'toText') {
+    if (!generatedText) { showToast('Chưa có dữ liệu để tải'); return; }
+    const blob = new Blob([generatedText], {type: 'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'questions_' + Date.now() + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('✅ Đã tải file văn bản');
+  } else {
+    if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
+    const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'questions_' + Date.now() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('✅ Đã tải file JSON');
+  }
 }
 
 // ─── CORE: xử lý code blocks ────────────────────────────────────────────────
@@ -634,15 +713,6 @@ function parseQuizText(text) {
 }
 
 // ─── PARSER MỚI: định dạng "--- Card N ---" / "Q:" / "A." / "A:" ───────────
-// Ví dụ:
-// --- Card 0 ---
-// Q: A bond is issued at par value when:
-// A. The bond pays no interest.
-// B. The bond is not between interest payment dates.
-// ...
-// A: D. The market rate of interest is the same as the contract rate of interest.
-//
-// Output tối giản chỉ gồm: questionText, correctAnswer (và isAvailableFlashcard nếu bật).
 
 function parseCardFormatText(text) {
   const flashcard = document.getElementById('flashcard').checked;
@@ -654,11 +724,9 @@ function parseCardFormatText(text) {
   function isCardStart(l) {
     return /^-{2,}\s*Card\s+\d+\s*-{2,}$/i.test(l.trim());
   }
-  // Lựa chọn A-E dạng "A. ..." (chỉ chấp nhận dấu chấm, để không nhầm với "A:" là nhãn đáp án)
   function isOptionLine(l) {
     return /^[A-E]\.\s+/.test(l);
   }
-  // Nhãn đáp án: dòng bắt đầu bằng "A:" (chữ A viết hoa, theo sau là dấu hai chấm)
   function isAnswerLabel(l) {
     return /^A\s*:/.test(l);
   }
@@ -666,7 +734,7 @@ function parseCardFormatText(text) {
   while (i < totalLines) {
     const line = lines[i].trim();
     if (!isCardStart(line)) { i++; continue; }
-    i++; // bỏ qua dòng "--- Card N ---"
+    i++;
 
     let questionRaw   = '';
     let options       = [];
@@ -678,7 +746,6 @@ function parseCardFormatText(text) {
       if (isCardStart(l)) break;
       if (!l) { i++; continue; }
 
-      // Dòng câu hỏi "Q: ..."
       if (/^Q\s*:/i.test(l)) {
         questionRaw = l.replace(/^Q\s*:\s*/i, '').trim();
         i++;
@@ -703,7 +770,6 @@ function parseCardFormatText(text) {
         continue;
       }
 
-      // Dòng lựa chọn "A. ..." đến "E. ..."
       if (isOptionLine(l)) {
         let optText = l;
         i++;
@@ -720,7 +786,6 @@ function parseCardFormatText(text) {
         continue;
       }
 
-      // Dòng đáp án "A: D. ..." → chỉ lấy chữ cái đáp án đúng
       if (isAnswerLabel(l)) {
         const ansRaw = l.replace(/^A\s*:\s*/i, '').trim();
         const m = ansRaw.match(/^([A-E])\b/i);
@@ -750,7 +815,6 @@ function parseCardFormatText(text) {
 function detectFormat(text) {
   const mode = document.getElementById('formatMode').value;
   if (mode !== 'auto') return mode;
-  // Nếu có dòng "--- Card N ---" thì coi là định dạng Card, ngược lại dùng chuẩn
   return /^-{2,}\s*Card\s+\d+\s*-{2,}\s*$/im.test(text) ? 'card' : 'standard';
 }
 
@@ -775,7 +839,7 @@ function syntaxHighlight(json) {
   );
 }
 
-function convert() {
+function convertToJson() {
   const text = inputEl.value.trim();
   if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
 
@@ -796,6 +860,7 @@ function convert() {
   }
 
   parsedJSON = questions;
+  generatedText = null;
   const jsonStr = JSON.stringify(questions, null, 2);
   const fmtLabel = format === 'card' ? 'Card' : 'Chuẩn';
 
@@ -824,6 +889,169 @@ function convert() {
   document.getElementById('parseInfo').textContent =
     `${multi} câu nhiều đáp án${hasCode ? ` · ${hasCode} câu có code` : ''}${empty ? ` · ⚠️ ${empty} thiếu đáp án` : ''} · ${elapsed}ms`;
   showToast(`✅ Đã chuyển ${questions.length} câu thành công (định dạng: ${fmtLabel})`);
+}
+
+// ─── PHẦN MỚI: chuyển ngược JSON → Văn bản ──────────────────────────────────
+
+function decodeEntities(str) {
+  return str.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+function inlineHtmlToText(str) {
+  str = str.replace(/<strong>([\s\S]*?)<\/strong>/g, '**$1**');
+  str = str.replace(/<code>([\s\S]*?)<\/code>/g, '`$1`');
+  return decodeEntities(str);
+}
+
+// Chuyển một chuỗi HTML (như questionText / explanation) thành mảng các dòng
+// văn bản thuần, khôi phục lại các code block dạng ```lang ... ```
+function htmlToLines(html) {
+  if (!html) return [];
+  const codeBlocks = [];
+  let working = html.replace(
+    /<pre><code(?:\s+class="language-([a-zA-Z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/g,
+    (m, lang, code) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push({ lang: lang || '', code: decodeEntities(code) });
+      return `@@CODEBLOCK_${idx}@@`;
+    }
+  );
+
+  const rawLines = working.split('<br>');
+  const lines = [];
+  for (const rl of rawLines) {
+    const trimmed = rl.trim();
+    if (!trimmed) continue;
+    const cbMatch = trimmed.match(/^@@CODEBLOCK_(\d+)@@$/);
+    if (cbMatch) {
+      const cb = codeBlocks[parseInt(cbMatch[1], 10)];
+      lines.push('```' + (cb.lang || ''));
+      const codeLines = cb.code.replace(/\n$/, '').split('\n');
+      for (const cl of codeLines) lines.push(cl);
+      lines.push('```');
+    } else {
+      lines.push(inlineHtmlToText(trimmed));
+    }
+  }
+  return lines;
+}
+
+// Tách phần đề bài và phần các lựa chọn (A. .. E.) từ mảng dòng
+function splitQuestionAndOptions(lines) {
+  const idx = lines.findIndex(l => /^[A-E]\.\s/.test(l));
+  if (idx === -1) return { questionLines: lines, options: [] };
+  return { questionLines: lines.slice(0, idx), options: lines.slice(idx) };
+}
+
+function generateStandardText(questions) {
+  const blocks = questions.map((q, i) => {
+    const lines = htmlToLines(q.questionText);
+    const { questionLines, options } = splitQuestionAndOptions(lines);
+    const explLines = htmlToLines(q.explanation);
+
+    let block = `Câu ${i + 1}\n`;
+    block += `Đề bài: ${questionLines.join('\n')}\n`;
+    if (options.length) {
+      block += `Các lựa chọn:\n${options.join('\n')}\n`;
+    }
+    block += `Đáp án đúng: ${q.correctAnswer || ''}\n`;
+    if (explLines.length) {
+      block += `Giải thích: ${explLines.join('\n')}\n`;
+    }
+    if (q.tags) block += `Tags: ${q.tags}\n`;
+    if (q.questionType) block += `Type: ${q.questionType}\n`;
+    return block.trim();
+  });
+  return blocks.join('\n\n');
+}
+
+function generateCardText(questions) {
+  const blocks = questions.map((q, i) => {
+    const lines = htmlToLines(q.questionText);
+    const { questionLines, options } = splitQuestionAndOptions(lines);
+
+    let block = `--- Card ${i} ---\n`;
+    block += `Q: ${questionLines.join('\n')}\n`;
+    if (options.length) block += options.join('\n') + '\n';
+
+    const ans = (q.correctAnswer || '').trim();
+    let answerLine = ans;
+    if (ans) {
+      const escaped = ans.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matchOpt = options.find(o => new RegExp('^' + escaped + '\\.\\s', 'i').test(o));
+      if (matchOpt) answerLine = matchOpt;
+    }
+    block += `A: ${answerLine}`;
+    return block;
+  });
+  return blocks.join('\n');
+}
+
+function detectJsonFormat(questions) {
+  const mode = document.getElementById('outFormat').value;
+  if (mode !== 'auto') return mode;
+  if (!questions.length) return 'standard';
+  const q0 = questions[0];
+  if ('questionType' in q0 || 'tags' in q0 || 'explanation' in q0) return 'standard';
+  return 'card';
+}
+
+function convertToText() {
+  const text = inputEl.value.trim();
+  if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
+
+  const start = performance.now();
+  let questions;
+  try {
+    questions = JSON.parse(text);
+    if (!Array.isArray(questions)) throw new Error('JSON gốc phải là một mảng (array) các câu hỏi.');
+  } catch (e) {
+    outputEl.className = 'output-area';
+    outputEl.textContent = '❌ Lỗi phân tích JSON: ' + e.message;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
+    document.getElementById('outputStats').textContent = '—';
+    document.getElementById('parseInfo').textContent = '';
+    return;
+  }
+
+  const format = detectJsonFormat(questions);
+  let resultText;
+  try {
+    resultText = format === 'card' ? generateCardText(questions) : generateStandardText(questions);
+  } catch (e) {
+    outputEl.className = 'output-area';
+    outputEl.textContent = '❌ Lỗi khi tạo văn bản: ' + e.message;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
+    return;
+  }
+  const elapsed = (performance.now() - start).toFixed(1);
+
+  generatedText = resultText;
+  parsedJSON = null;
+
+  if (!questions.length) {
+    outputEl.className = 'output-area empty';
+    outputEl.innerHTML = `<div><p>⚠️ Mảng JSON rỗng, không có câu hỏi nào.</p></div>`;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge warn">0 câu</span>`;
+    document.getElementById('outputStats').textContent = '—';
+    document.getElementById('parseInfo').textContent = '';
+    return;
+  }
+
+  outputEl.className = 'output-area';
+  outputEl.textContent = resultText;
+  outputEl.scrollTop = 0;
+
+  const fmtLabel = format === 'card' ? 'Card' : 'Chuẩn';
+  document.getElementById('resultBadge').innerHTML = `<span class="badge ok">✓ ${questions.length} câu</span> <span class="badge fmt">${fmtLabel}</span>`;
+  document.getElementById('outputStats').textContent = `${questions.length} câu · ${(resultText.length/1024).toFixed(1)} KB`;
+  document.getElementById('parseInfo').textContent = `${elapsed}ms`;
+  showToast(`✅ Đã chuyển ${questions.length} câu thành văn bản (định dạng: ${fmtLabel})`);
+}
+
+function convert() {
+  if (appMode === 'toText') convertToText();
+  else convertToJson();
 }
 
 // ─── Sample data ─────────────────────────────────────────────────────────────
@@ -875,6 +1103,34 @@ Giải thích: Học thuyết này cho rằng trách nhiệm xã hội duy nhấ
   updateConfigVisibility();
   updateInputStats();
   showToast('📄 Đã nạp mẫu (gồm cả định dạng "Đáp án:" dính vào lựa chọn D)');
+}
+
+function loadJsonSample(type) {
+  document.getElementById('outFormat').value = 'auto';
+  const sample = type === 'card' ? [
+    {
+      questionText: "A bond is issued at par value when:<br>A. The bond pays no interest.<br>B. The bond is not between interest payment dates.<br>C. Straight line amortization is used by the company.<br>D. The market rate of interest is the same as the contract rate of interest.<br>E. The bond is callable.<br>",
+      correctAnswer: "D",
+      isAvailableFlashcard: true
+    },
+    {
+      questionText: "A bond sells at a discount when the:<br>A. Contract rate is above the market rate.<br>B. Contract rate is equal to the market rate.<br>C. Contract rate is below the market rate.<br>D. Bond has a short-term life.<br>E. Bond pays interest only once a year.<br>",
+      correctAnswer: "C",
+      isAvailableFlashcard: true
+    }
+  ] : [
+    {
+      questionText: "What is the default data structure supported by AsyncStorage?<br>A. Arrays<br>B. Buffers<br>C. Key-value pairs<br>D. Trees<br>",
+      questionType: "multiple_choice",
+      correctAnswer: "C",
+      explanation: "AsyncStorage là một hệ thống lưu trữ bất đồng bộ, bất biến, dưới dạng các cặp khóa - giá trị (key-value pairs) dành cho toàn bộ ứng dụng React Native.",
+      tags: "MMA301",
+      isAvailableFlashcard: true
+    }
+  ];
+  inputEl.value = JSON.stringify(sample, null, 2);
+  updateInputStats();
+  showToast(type === 'card' ? '📄 Đã nạp mẫu JSON định dạng Card' : '📄 Đã nạp mẫu JSON định dạng Chuẩn');
 }
 
 updateConfigVisibility();
