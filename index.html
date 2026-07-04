@@ -47,6 +47,16 @@
     border-radius:20px;border:1px solid var(--line);font-family:var(--mono);white-space:nowrap;
   }
 
+  .mode-switch{
+    display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px;gap:2px;
+  }
+  .mode-switch button{
+    border:none;border-radius:17px;padding:6px 14px;font-size:12px;font-weight:600;
+    background:transparent;color:var(--ink-dim);
+  }
+  .mode-switch button.active{background:var(--amber);color:#1a1206}
+  .mode-switch button:hover:not(.active){background:#23283a;color:var(--ink)}
+
   .layout{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 59px)}
   .panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
   .panel + .panel{border-left:1px solid var(--line)}
@@ -68,6 +78,7 @@
     padding:10px 18px;background:var(--amber-soft);border-bottom:1px solid #4a3a22;
     display:flex;align-items:center;gap:18px;flex-wrap:wrap;flex-shrink:0;
   }
+  .config-bar.hidden{display:none !important}
   .config-field{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#e3c894}
   .config-field input[type=text]{
     border:1px solid #5a4626;border-radius:var(--radius);padding:5px 9px;font-size:12.5px;
@@ -265,22 +276,26 @@
     <span class="sub">Không biết múa</span>
   </div>
   <div class="spacer"></div>
+  <div class="mode-switch" id="modeSwitch">
+    <button id="modeBtnT2J" class="active" onclick="setAppMode('text2json')">Văn bản → JSON</button>
+    <button id="modeBtnJ2T" onclick="setAppMode('json2text')">JSON → Văn bản</button>
+  </div>
 </header>
 
 <div class="layout">
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot in"></span>Văn bản đầu vào</span>
-      <div class="actions">
-        <button class="ghost" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
-        <button class="ghost" onclick="loadSample('card')">Mẫu FlashCardVip</button>
-        <button class="success" onclick="openOcrModal()">OCR Ảnh</button>
+      <span class="label"><span class="dot in"></span><span id="inputLabel">Văn bản đầu vào</span></span>
+      <div class="actions" id="leftActions">
+        <button class="ghost" id="btnSampleBasic" onclick="loadSample('basic')">Mẫu Ngân Hàng Câu Hỏi</button>
+        <button class="ghost" id="btnSampleCard" onclick="loadSample('card')">Mẫu FlashCardVip</button>
+        <button class="success" id="btnOcr" onclick="openOcrModal()">OCR Ảnh</button>
         <button class="danger" onclick="clearInput()">Xoá</button>
-        <button class="primary" onclick="convert()">▶ Chuyển đổi</button>
+        <button class="primary" id="btnConvert" onclick="convert()">▶ Chuyển đổi</button>
       </div>
     </div>
 
-    <div class="config-bar">
+    <div class="config-bar" id="configBar">
       <div class="config-field">
         <label for="formatMode">Định dạng</label>
         <select id="formatMode">
@@ -312,17 +327,17 @@
 
   <div class="panel">
     <div class="panel-header">
-      <span class="label"><span class="dot out"></span>JSON đầu ra</span>
+      <span class="label"><span class="dot out"></span><span id="outputLabel">JSON đầu ra</span></span>
       <div class="actions">
         <span id="resultBadge"></span>
-        <button class="ghost" onclick="copyJSON()">Sao chép</button>
-        <button class="success" onclick="downloadJSON()">⬇ Tải JSON</button>
+        <button class="ghost" onclick="copyOutput()">Sao chép</button>
+        <button class="success" id="btnDownload" onclick="downloadOutput()">⬇ Tải JSON</button>
       </div>
     </div>
     <div id="outputArea" class="output-area empty">
       <svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
-      <div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div>
-      <div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>
+      <div id="outputEmptyMain">Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div>
+      <div class="empty-hint" id="outputEmptyHint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>
     </div>
     <div class="footer-bar">
       <span id="outputStats">—</span>
@@ -401,11 +416,58 @@
 <div class="toast" id="toast"></div>
 
 <script>
-let parsedJSON = null;
+let appMode = 'text2json'; // 'text2json' | 'json2text'
+let parsedJSON = null;      // used when output is JSON
+let outputText = null;      // used when output is plain text
 const inputEl = document.getElementById('inputText');
 const outputEl = document.getElementById('outputArea');
 
 inputEl.addEventListener('input', updateInputStats);
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODE SWITCHING (Văn bản → JSON  |  JSON → Văn bản)
+// ─────────────────────────────────────────────────────────────────────────
+
+function setAppMode(m) {
+  if (appMode === m) return;
+  appMode = m;
+
+  document.getElementById('modeBtnT2J').classList.toggle('active', m === 'text2json');
+  document.getElementById('modeBtnJ2T').classList.toggle('active', m === 'json2text');
+
+  const configBar   = document.getElementById('configBar');
+  const inputLabel  = document.getElementById('inputLabel');
+  const outputLabel = document.getElementById('outputLabel');
+  const btnOcr        = document.getElementById('btnOcr');
+  const btnSampleBasic = document.getElementById('btnSampleBasic');
+  const btnSampleCard  = document.getElementById('btnSampleCard');
+  const btnDownload  = document.getElementById('btnDownload');
+  const btnConvert   = document.getElementById('btnConvert');
+
+  if (m === 'json2text') {
+    configBar.classList.add('hidden');
+    inputLabel.textContent = 'JSON đầu vào';
+    outputLabel.textContent = 'Văn bản đầu ra';
+    btnOcr.style.display = 'none';
+    btnSampleBasic.textContent = 'Mẫu JSON (Chuẩn)';
+    btnSampleCard.textContent = 'Mẫu JSON (Card)';
+    btnDownload.innerHTML = '⬇ Tải .txt';
+    btnConvert.innerHTML = '◀ Chuyển đổi';
+    inputEl.placeholder = 'Dán mảng JSON câu hỏi vào đây (kết quả xuất ra từ chế độ Văn bản → JSON)...';
+  } else {
+    configBar.classList.remove('hidden');
+    inputLabel.textContent = 'Văn bản đầu vào';
+    outputLabel.textContent = 'JSON đầu ra';
+    btnOcr.style.display = '';
+    btnSampleBasic.textContent = 'Mẫu Ngân Hàng Câu Hỏi';
+    btnSampleCard.textContent = 'Mẫu FlashCardVip';
+    btnDownload.innerHTML = '⬇ Tải JSON';
+    btnConvert.innerHTML = '▶ Chuyển đổi';
+    inputEl.placeholder = 'Dán văn bản đề thi vào đây, hoặc bấm OCR Ảnh để import ảnh...';
+  }
+
+  clearInput();
+}
 
 function updateConfigVisibility() {
   const mode = document.getElementById('formatMode').value;
@@ -427,6 +489,21 @@ document.getElementById('formatMode').addEventListener('change', updateConfigVis
 function updateInputStats() {
   const t = inputEl.value.trim();
   if (!t) { document.getElementById('inputStats').textContent = 'Chưa có nội dung'; return; }
+
+  if (appMode === 'json2text') {
+    const lines = t.split('\n').length;
+    const chars = t.length;
+    let countInfo = '';
+    try {
+      const arr = JSON.parse(t);
+      if (Array.isArray(arr)) countInfo = ` · ${arr.length} câu (JSON hợp lệ)`;
+    } catch (e) {
+      countInfo = ' · ⚠️ JSON chưa hợp lệ';
+    }
+    document.getElementById('inputStats').textContent = `${lines} dòng · ${chars} ký tự${countInfo}`;
+    return;
+  }
+
   const lines = t.split('\n').length;
   const chars = t.length;
   const roughStandard = (t.match(/Câu\s+\d+/gi) || []).length;
@@ -440,8 +517,13 @@ function updateInputStats() {
 function clearInput() {
   inputEl.value = '';
   outputEl.className = 'output-area empty';
-  outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
+  if (appMode === 'json2text') {
+    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Dán JSON và nhấn <strong>◀ Chuyển đổi</strong></div><div class="empty-hint">Văn bản dạng "Câu N" / "Card N" sẽ hiện ở đây, có thể dán ngược lại vào ô Văn bản → JSON.</div>';
+  } else {
+    outputEl.innerHTML = '<svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg><div>Nhập văn bản và nhấn <strong>▶ Chuyển đổi</strong></div><div class="empty-hint">Kết quả JSON sẽ hiện ở đây, có tô màu cú pháp để dễ kiểm tra.</div>';
+  }
   parsedJSON = null;
+  outputText = null;
   document.getElementById('resultBadge').innerHTML = '';
   document.getElementById('outputStats').textContent = '—';
   document.getElementById('parseInfo').textContent = '';
@@ -455,14 +537,32 @@ function showToast(msg, dur = 2200) {
   setTimeout(() => t.classList.remove('show'), dur);
 }
 
-function copyJSON() {
+function copyOutput() {
+  if (appMode === 'json2text') {
+    if (!outputText) { showToast('Chưa có dữ liệu để sao chép'); return; }
+    navigator.clipboard.writeText(outputText)
+      .then(() => showToast('✅ Đã sao chép văn bản'))
+      .catch(() => showToast('❌ Không thể sao chép'));
+    return;
+  }
   if (!parsedJSON) { showToast('Chưa có dữ liệu để sao chép'); return; }
   navigator.clipboard.writeText(JSON.stringify(parsedJSON, null, 2))
     .then(() => showToast('✅ Đã sao chép JSON'))
     .catch(() => showToast('❌ Không thể sao chép'));
 }
 
-function downloadJSON() {
+function downloadOutput() {
+  if (appMode === 'json2text') {
+    if (!outputText) { showToast('Chưa có dữ liệu để tải'); return; }
+    const blob = new Blob([outputText], {type: 'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'questions_' + Date.now() + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('✅ Đã tải file văn bản');
+    return;
+  }
   if (!parsedJSON) { showToast('Chưa có dữ liệu để tải'); return; }
   const blob = new Blob([JSON.stringify(parsedJSON, null, 2)], {type: 'application/json'});
   const a = document.createElement('a');
@@ -907,7 +1007,7 @@ function detectFormat(text) {
   return /^-{2,}\s*Card\s+\d+\s*-{2,}\s*$/im.test(text) ? 'card' : 'standard';
 }
 
-// ─── Output rendering ────────────────────────────────────────────────────────
+// ─── Output rendering (JSON) ─────────────────────────────────────────────────
 
 function escapeForDisplay(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -928,7 +1028,191 @@ function syntaxHighlight(json) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// JSON → VĂN BẢN (chiều ngược lại)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Bỏ escape HTML entities: &lt; &gt; &amp;
+function unescapeHtmlEntities(str) {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+// Đổi 1 đoạn HTML inline (không chứa <pre>) thành text thường:
+// <strong>x</strong> -> **x**, <code>x</code> -> `x`, <br> -> xuống dòng
+function inlineHtmlToLines(html) {
+  const parts = html.split(/<br\s*\/?>/i);
+  return parts
+    .map(p => {
+      let t = p;
+      t = t.replace(/<strong>([\s\S]*?)<\/strong>/gi, '**$1**');
+      t = t.replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`');
+      t = unescapeHtmlEntities(t);
+      return t.trim();
+    })
+    .filter(l => l.length > 0);
+}
+
+// Đổi toàn bộ HTML (questionText/explanation) về lại text thô,
+// khôi phục cả khối ```lang ... ``` nếu có.
+function htmlFieldToLines(html) {
+  if (!html) return [];
+  const lines = [];
+  const codeBlockRe = /<pre><code(?:\s+class="language-([a-zA-Z0-9_+-]+)")?>([\s\S]*?)<\/code><\/pre>/gi;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = codeBlockRe.exec(html)) !== null) {
+    if (match.index > lastIndex) {
+      lines.push(...inlineHtmlToLines(html.slice(lastIndex, match.index)));
+    }
+    const lang = match[1] || '';
+    const code = unescapeHtmlEntities(match[2]);
+    lines.push('```' + lang);
+    lines.push(...code.split('\n'));
+    lines.push('```');
+    lastIndex = codeBlockRe.lastIndex;
+  }
+  if (lastIndex < html.length) {
+    lines.push(...inlineHtmlToLines(html.slice(lastIndex)));
+  }
+  return lines;
+}
+
+// Tách questionText thành { questionLines, optionLines }, dựa vào chỗ
+// các dòng bắt đầu bằng "A." "B." "C." ... (do buildQuestionText tạo ra).
+function splitQuestionAndOptions(lines) {
+  let splitIdx = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^[A-E]\.\s/.test(lines[i])) { splitIdx = i; break; }
+  }
+  return {
+    questionLines: lines.slice(0, splitIdx),
+    optionLines: lines.slice(splitIdx)
+  };
+}
+
+function jsonToStandardText(questions) {
+  const blocks = questions.map((q, idx) => {
+    const n = idx + 1;
+    const { questionLines, optionLines } = splitQuestionAndOptions(htmlFieldToLines(q.questionText || ''));
+    const explanationLines = htmlFieldToLines(q.explanation || '');
+
+    const out = [];
+    out.push(`Câu ${n}`);
+    out.push(`Đề bài: ${questionLines[0] || ''}`);
+    for (let i = 1; i < questionLines.length; i++) out.push(questionLines[i]);
+
+    if (optionLines.length) {
+      out.push('Các lựa chọn:');
+      out.push(...optionLines);
+    }
+
+    out.push(`Đáp án đúng: ${q.correctAnswer != null ? q.correctAnswer : ''}`);
+
+    if (explanationLines.length) {
+      out.push(`Giải thích: ${explanationLines[0]}`);
+      for (let i = 1; i < explanationLines.length; i++) out.push(explanationLines[i]);
+    }
+
+    if (q.tags) out.push(`Tags: ${q.tags}`);
+    if (q.questionType) out.push(`Loại câu hỏi: ${q.questionType}`);
+
+    return out.join('\n');
+  });
+
+  return blocks.join('\n\n');
+}
+
+function jsonToCardText(questions) {
+  const blocks = questions.map((q, idx) => {
+    const { questionLines, optionLines } = splitQuestionAndOptions(htmlFieldToLines(q.questionText || ''));
+
+    const out = [];
+    out.push(`--- Card ${idx} ---`);
+    out.push(`Q: ${questionLines[0] || ''}`);
+    for (let i = 1; i < questionLines.length; i++) out.push(questionLines[i]);
+    out.push(...optionLines);
+    out.push(`A: ${q.correctAnswer != null ? q.correctAnswer : ''}`);
+    return out.join('\n');
+  });
+
+  return blocks.join('\n');
+}
+
+// Đoán xem mảng JSON này giống dạng "Chuẩn" (có questionType/tags/explanation)
+// hay dạng "Card" (chỉ có questionText + correctAnswer).
+function detectJsonFlavor(questions) {
+  const hasStandardFields = questions.some(q =>
+    Object.prototype.hasOwnProperty.call(q, 'questionType') ||
+    Object.prototype.hasOwnProperty.call(q, 'tags') ||
+    Object.prototype.hasOwnProperty.call(q, 'explanation')
+  );
+  return hasStandardFields ? 'standard' : 'card';
+}
+
+function convertJsonToText() {
+  const raw = inputEl.value.trim();
+  if (!raw) { showToast('⚠️ Chưa có JSON để chuyển đổi'); return; }
+
+  const start = performance.now();
+  let questions;
+  try {
+    const data = JSON.parse(raw);
+    questions = Array.isArray(data) ? data : [data];
+  } catch (e) {
+    outputEl.className = 'output-area';
+    outputEl.innerHTML = `<span style="color:var(--red)">❌ JSON không hợp lệ: ${escapeForDisplay(e.message)}</span>`;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
+    document.getElementById('outputStats').textContent = '—';
+    document.getElementById('parseInfo').textContent = '';
+    outputText = null;
+    return;
+  }
+
+  if (questions.length === 0) {
+    outputEl.className = 'output-area empty';
+    outputEl.innerHTML = '<div><p>⚠️ Mảng JSON rỗng, không có câu hỏi nào để chuyển.</p></div>';
+    document.getElementById('resultBadge').innerHTML = `<span class="badge warn">0 câu</span>`;
+    document.getElementById('outputStats').textContent = '—';
+    document.getElementById('parseInfo').textContent = '';
+    outputText = null;
+    return;
+  }
+
+  const flavor = detectJsonFlavor(questions);
+  let text;
+  try {
+    text = flavor === 'card' ? jsonToCardText(questions) : jsonToStandardText(questions);
+  } catch (e) {
+    outputEl.className = 'output-area';
+    outputEl.innerHTML = `<span style="color:var(--red)">❌ Lỗi chuyển đổi: ${escapeForDisplay(e.message)}</span>`;
+    document.getElementById('resultBadge').innerHTML = `<span class="badge err">Lỗi</span>`;
+    outputText = null;
+    return;
+  }
+  const elapsed = (performance.now() - start).toFixed(1);
+
+  outputText = text;
+  outputEl.className = 'output-area';
+  outputEl.textContent = text;
+  outputEl.scrollTop = 0;
+
+  const fmtLabel = flavor === 'card' ? 'Card' : 'Chuẩn';
+  document.getElementById('resultBadge').innerHTML =
+    `<span class="badge ok">✓ ${questions.length} câu</span> <span class="badge fmt">${fmtLabel}</span>`;
+  document.getElementById('outputStats').textContent = `${questions.length} câu · ${(text.length/1024).toFixed(1)} KB`;
+  document.getElementById('parseInfo').textContent = `${elapsed}ms`;
+  showToast(`✅ Đã chuyển ${questions.length} câu JSON thành văn bản (định dạng: ${fmtLabel})`);
+}
+
+// ─── Convert chính: điều hướng theo appMode ──────────────────────────────────
+
 function convert() {
+  if (appMode === 'json2text') { convertJsonToText(); return; }
+
   const text = inputEl.value.trim();
   if (!text) { showToast('⚠️ Chưa có nội dung để chuyển đổi'); return; }
 
@@ -981,7 +1265,37 @@ function convert() {
 
 // ─── Sample data ─────────────────────────────────────────────────────────────
 
+const SAMPLE_JSON_STANDARD = [
+  {
+    "questionText": "What is the default data structure supported by AsyncStorage?<br>A. Arrays<br>B. Buffers<br>C. Key-value pairs<br>D. Trees<br>",
+    "questionType": "multiple_choice",
+    "correctAnswer": "C",
+    "explanation": "AsyncStorage là một hệ thống lưu trữ bất đồng bộ, bất biến, dưới dạng các cặp khóa - giá trị (key-value pairs) dành cho toàn bộ ứng dụng React Native.",
+    "tags": "MMA301",
+    "isAvailableFlashcard": true
+  }
+];
+
+const SAMPLE_JSON_CARD = [
+  {
+    "questionText": "A bond is issued at par value when:<br>A. The bond pays no interest.<br>B. The bond is not between interest payment dates.<br>C. Straight line amortization is used by the company.<br>D. The market rate of interest is the same as the contract rate of interest.<br>E. The bond is callable.<br>",
+    "correctAnswer": "D"
+  }
+];
+
 function loadSample(type) {
+  if (appMode === 'json2text') {
+    if (type === 'card') {
+      inputEl.value = JSON.stringify(SAMPLE_JSON_CARD, null, 2);
+      showToast('📄 Đã nạp mẫu JSON dạng Card');
+    } else {
+      inputEl.value = JSON.stringify(SAMPLE_JSON_STANDARD, null, 2);
+      showToast('📄 Đã nạp mẫu JSON dạng Chuẩn');
+    }
+    updateInputStats();
+    return;
+  }
+
   if (type === 'card') {
     document.getElementById('formatMode').value = 'auto';
     updateConfigVisibility();
