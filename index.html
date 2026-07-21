@@ -699,6 +699,13 @@ function parseQuizText(text) {
   const ANSWER_LABEL_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:/i;
   const ANSWER_STRIP_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:\s*/i;
 
+  // Lựa chọn: chấp nhận "A. Foo", "A) Foo", "A: Foo", "A - Foo" và cả "A Foo" (không dấu)
+  const OPTION_RE = /^[A-D](?:\s*[.)\:\-]\s*|\s+)(?=\S)/i;
+  // Chuẩn hoá "A Foo" -> "A. Foo" để questionText luôn đúng format
+  function normalizeOption(s) {
+    return s.replace(/^([A-D])(?:\s*[.)\:\-]\s*|\s+)/i, (_, letter) => letter.toUpperCase() + '. ');
+  }
+
   let i = 0;
 
   function isQuestionStart(l) {
@@ -762,7 +769,7 @@ function parseQuizText(text) {
         while (i < totalLines) {
           const nl = lines[i].trim();
           if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(nl)) break;
-          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (OPTION_RE.test(nl)) break;
           if (ANSWER_LABEL_RE.test(nl)) break;
           if (/^(Giải thích|Explanation)\s*:/i.test(nl)) break;
           if (/^Tags?\s*:/i.test(nl)) break;
@@ -782,7 +789,7 @@ function parseQuizText(text) {
 
       if (/^(Các lựa chọn|Options|Choices)\s*:/i.test(l)) { i++; continue; }
 
-      if (/^[A-D]\.\s+/i.test(l)) {
+      if (OPTION_RE.test(l)) {
         // Tách trường hợp đáp án bị dính ngay sau lựa chọn cuối cùng, ví dụ:
         // "D. ... không cần tuân thủ. Đáp án: C."
         let optLine = l;
@@ -798,7 +805,7 @@ function parseQuizText(text) {
         while (i < totalLines) {
           const nl = lines[i].trim();
           if (!nl) break;
-          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (OPTION_RE.test(nl)) break;
           if (ANSWER_LABEL_RE.test(nl)) break;
           if (/^(Giải thích|Explanation|Tags?)\s*:/i.test(nl)) break;
           if (isQuestionStart(nl)) break;
@@ -806,7 +813,7 @@ function parseQuizText(text) {
           optText += ' ' + nl;
           i++;
         }
-        options.push(optText);
+        options.push(normalizeOption(optText));
 
         if (inlineAnswer) {
           correctAnswer = extractCorrectAnswer(inlineAnswer);
@@ -829,7 +836,7 @@ function parseQuizText(text) {
           if (isQuestionStart(nl)) break;
           if (/^Tags?\s*:/i.test(nl)) break;
           if (/^(Loại câu hỏi|Type)\s*:/i.test(nl)) break;
-          if (/^[A-D]\.\s+/.test(nl) && !explanationRaw) break;
+          if (OPTION_RE.test(nl) && !explanationRaw) break;
 
           if (lines[i].trim().startsWith('```')) {
             const block = readBlock(i);
@@ -862,7 +869,7 @@ function parseQuizText(text) {
         while (i < totalLines) {
           const nl = lines[i].trim();
           if (!nl) break;
-          if (/^[A-D]\.\s+/i.test(nl)) break;
+          if (OPTION_RE.test(nl)) break;
           if (/^(Đáp án|Answer)/i.test(nl)) break;
           if (isQuestionStart(nl)) break;
           if (lines[i].trim().startsWith('```')) {
