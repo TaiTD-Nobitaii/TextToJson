@@ -661,7 +661,7 @@ function buildQuestionText(questionRaw, options) {
 function extractCorrectAnswer(line) {
   line = line.trim();
 
-  const multiViRe = /([A-D])\s*(?:và|and|,)\s*([A-D])(?:\s*(?:và|and|,)\s*([A-D]))?/i;
+  const multiViRe = /([A-H])\s*(?:và|and|,)\s*([A-H])(?:\s*(?:và|and|,)\s*([A-H]))?/i;
   const mMulti = line.match(multiViRe);
   if (mMulti) {
     let ans = mMulti[1].toUpperCase() + mMulti[2].toUpperCase();
@@ -669,13 +669,13 @@ function extractCorrectAnswer(line) {
     return ans;
   }
 
-  const mConcat = line.match(/^([A-D]{2,4})\b/i);
+  const mConcat = line.match(/^([A-H]{2,4})\b/i);
   if (mConcat) return mConcat[1].toUpperCase();
 
-  const mSingle = line.match(/^([A-D])[.\s:]/i);
+  const mSingle = line.match(/^([A-H])[.\s:]/i);
   if (mSingle) return mSingle[1].toUpperCase();
 
-  const mLetter = line.match(/^([A-D])$/i);
+  const mLetter = line.match(/^([A-H])$/i);
   if (mLetter) return mLetter[1].toUpperCase();
 
   if (/^(true|đúng)$/i.test(line)) return 'True';
@@ -699,11 +699,12 @@ function parseQuizText(text) {
   const ANSWER_LABEL_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:/i;
   const ANSWER_STRIP_RE = /^(Đáp án đúng|Đáp án|Correct Answer|Answer)\s*:\s*/i;
 
-  // Lựa chọn: chấp nhận "A. Foo", "A) Foo", "A: Foo", "A - Foo" và cả "A Foo" (không dấu)
-  const OPTION_RE = /^[A-D](?:\s*[.)\:\-]\s*|\s+)(?=\S)/i;
+  // Lựa chọn: chấp nhận "A. Foo", "A) Foo", "A: Foo", "A - Foo" và cả "A Foo" (không dấu).
+  // Dải A-H để hỗ trợ câu hỏi có nhiều hơn 4 lựa chọn (E, F, G, H...).
+  const OPTION_RE = /^[A-H](?:\s*[.)\:\-]\s*|\s+)(?=\S)/i;
   // Chuẩn hoá "A Foo" -> "A. Foo" để questionText luôn đúng format
   function normalizeOption(s) {
-    return s.replace(/^([A-D])(?:\s*[.)\:\-]\s*|\s+)/i, (_, letter) => letter.toUpperCase() + '. ');
+    return s.replace(/^([A-H])(?:\s*[.)\:\-]\s*|\s+)/i, (_, letter) => letter.toUpperCase() + '. ');
   }
 
   let i = 0;
@@ -1093,7 +1094,7 @@ function htmlFieldToLines(html) {
 function splitQuestionAndOptions(lines) {
   let splitIdx = lines.length;
   for (let i = 0; i < lines.length; i++) {
-    if (/^[A-E]\.\s/.test(lines[i])) { splitIdx = i; break; }
+    if (/^[A-H]\.\s/.test(lines[i])) { splitIdx = i; break; }
   }
   return {
     questionLines: lines.slice(0, splitIdx),
@@ -1551,7 +1552,7 @@ function normalizeOcrText(raw) {
   if (rawLines.length === 0) return '';
 
   // Các mốc nhận diện để KHÔNG gộp dòng vào dòng trước (mỗi mốc bắt đầu 1 dòng mới)
-  const NEW_LINE_RE = /^([A-E]\s*[\.\)\:\-]|Đáp án đúng|Đáp án|Correct Answer|Answer|Giải thích|Explanation|Tags?|Câu\s+\d+|Question\s+\d+|Loại câu hỏi|Type)\s*[:\.]?/i;
+  const NEW_LINE_RE = /^([A-H]\s*[\.\)\:\-]|Đáp án đúng|Đáp án|Correct Answer|Answer|Giải thích|Explanation|Tags?|Câu\s+\d+|Question\s+\d+|Loại câu hỏi|Type)\s*[:\.]?/i;
 
   const merged = [];
   for (const l of rawLines) {
