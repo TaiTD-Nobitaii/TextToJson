@@ -352,7 +352,7 @@
     <div class="modal-head">
       <div>
         <h2>Import Ảnh</h2>
-        <div class="sub">Tối đa 50 ảnh/lần · giữ đúng thứ tự · tự động chuẩn hóa & đánh số Câu N</div>
+        <div class="sub">Tối đa 60 ảnh/lần · giữ đúng thứ tự · tự động chuẩn hóa & đánh số Câu N</div>
       </div>
       <div class="spacer"></div>
       <button class="modal-close" onclick="closeOcrModal()">✕</button>
@@ -361,7 +361,7 @@
     <div class="modal-body">
       <div class="ocr-dropzone" id="ocrDropzone">
         <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>
-        <div class="main-text">Kéo thả ảnh vào đây, hoặc bấm để chọn (tối đa 50 ảnh/lần)</div>
+        <div class="main-text">Kéo thả ảnh vào đây, hoặc bấm để chọn (tối đa 60 ảnh/lần)</div>
         <div class="sub-text">Ảnh được thêm vào cuối danh sách, có thể sắp xếp lại thứ tự bên dưới</div>
         <input type="file" id="ocrFileInput" accept="image/*" multiple>
       </div>
@@ -1356,13 +1356,13 @@ updateConfigVisibility();
 updateInputStats();
 
 // ─── OCR MODULE ──────────────────────────────────────────────────────────────
-// Import tối đa 50 ảnh/lần, giữ nguyên thứ tự thêm vào (có thể sắp xếp lại
+// Import tối đa 60 ảnh/lần, giữ nguyên thứ tự thêm vào (có thể sắp xếp lại
 // bằng nút ▲▼), OCR tuần tự bằng Tesseract.js, tự động CHUẨN HÓA kết quả
 // (gộp dòng bị ngắt giữa câu, quy các kiểu "A)"/"A-"/"A:" về đúng "A. ")
 // rồi ghép thành "Câu 1: ...", "Câu 2: ..." để chèn thẳng vào ô nhập bên trái,
 // đúng định dạng mà parser bên trên hiểu được.
 
-const OCR_MAX_FILES = 50;
+const OCR_MAX_FILES = 60;
 
 let ocrFiles = []; // { id, file, url, status: 'pending'|'processing'|'done'|'error', text }
 let ocrIdSeq = 0;
